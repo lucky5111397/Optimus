@@ -1,0 +1,60 @@
+version: '3.8'
+
+services:
+  mongodb:
+    image: mongo:latest
+    container_name: optimus-mongodb
+    ports:
+      - "27017:27017"
+    volumes:
+      - optimus-mongo-data:/data/db
+    networks:
+      - optimus-net
+
+  backend:
+    build:
+      context: ../backend
+      dockerfile: ../infrastructure/Dockerfile.api
+    container_name: optimus-backend
+    ports:
+      - "3000:3000"
+    environment:
+      - MONGODB_URI=mongodb://mongodb:27017/optimus
+      - WORKER_URL=http://worker:8080
+    depends_on:
+      - mongodb
+    networks:
+      - optimus-net
+
+  worker:
+    build:
+      context: ../worker
+      dockerfile: Dockerfile
+    container_name: optimus-worker
+    ports:
+      - "8080:8080"
+    volumes:
+      - optimus-workspaces:/tmp/optimus_workspaces
+    networks:
+      - optimus-net
+
+  frontend:
+    build:
+      context: ../frontend
+      dockerfile: ../infrastructure/Dockerfile.frontend
+    container_name: optimus-frontend
+    ports:
+      - "5173:5173"
+    environment:
+      - VITE_API_URL=http://localhost:3000/api
+    networks:
+      - optimus-net
+
+networks:
+  optimus-net:
+    driver: bridge
+
+volumes:
+  optimus-mongo-data:
+  optimus-workspaces:
+

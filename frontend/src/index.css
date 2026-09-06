@@ -1,0 +1,53 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-background text-text-primary font-sans antialiased;
+  }
+}
+
+/* Custom scrollbar styling (thin, dark) */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #30363D #0A0C10;
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #0A0C10;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #30363D;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #484F58;
+}
+
+::-webkit-scrollbar-corner {
+  background: #0A0C10;
+}
+
+/* Smooth scroll behavior */
+html {
+  scroll-behavior: smooth;
+}
+
+/* Selection color matching the primary blue */
+::selection {
+  background-color: #3B82F6;
+  color: #ffffff;
+}
+
+::-moz-selection {
+  background-color: #3B82F6;
+  color: #ffffff;
+}
