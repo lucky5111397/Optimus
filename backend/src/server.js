@@ -15,6 +15,8 @@ const authRoutes = require('./routes/auth');
 const repositoriesRoutes = require('./routes/repositories');
 const tasksRoutes = require('./routes/tasks');
 const apiRoutes = require('./routes/api');
+const settingsRoutes = require('./routes/settings');
+const { authLimiter, taskLimiter } = require('./middleware/rateLimit');
 
 const mongoose = require('mongoose');
 const aiGateway = require('./ai/gateway');
@@ -25,6 +27,15 @@ const PORT = process.env.PORT || 3000;
 // Initialize Firebase
 initializeFirebase();
 
+// Standard HTTP Security Headers
+app.use((req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('X-XSS-Protection', '0');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  next();
+});
+
 // Allowed origins for CORS (supporting both localhost and 127.0.0.1 in development)
 const allowedOrigins = [
   process.env.FRONTEND_URL,
@@ -34,7 +45,6 @@ const allowedOrigins = [
 
 // Middleware
 app.use(cors({
-  origin: process.env.FRONTEND_URL || 'http://localhost:5173',
   origin: (origin, callback) => {
     // Allow requests with no origin (like mobile apps, curl, server-to-server)
     if (!origin || allowedOrigins.includes(origin)) {
@@ -88,18 +98,21 @@ app.get('/api/health/ready', (req, res) => {
 });
 
 // Routes
-app.use('/api/auth', authRoutes);
+app.use('/api/auth', authLimiter, authRoutes);
 app.use('/api/repositories', repositoriesRoutes);
-app.use('/api/tasks', tasksRoutes);
+app.use('/api/tasks', taskLimiter, tasksRoutes);
+app.use('/api/settings', settingsRoutes);
 app.use('/api', apiRoutes);
 
-// Error handling middleware
+// Error handling middleware (sanitized for production security)
 app.use((err, req, res, next) => {
-  console.error(err.stack);
-  res.status(500).json({
+  console.error('[Error]', err.stack || err.message || err);
+  res.status(err.status || 500).json({
     error: {
-      code: 'INTERNAL_SERVER_ERROR',
-      message: err.message || 'An unexpected error occurred.'
+      code: err.code || 'INTERNAL_SERVER_ERROR',
+      message: process.env.NODE_ENV === 'production'
+        ? 'An unexpected error occurred.'
+        : (err.message || 'An unexpected error occurred.')
     }
   });
 });

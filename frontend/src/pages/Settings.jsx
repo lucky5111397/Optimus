@@ -6,8 +6,19 @@ import { useAuth } from '../features/auth/AuthContext';
 export default function Settings() {
   const { user, fetchUser } = useAuth();
   const [activeTab, setActiveTab] = useState('general');
-  const [envVars, setEnvVars] = useState([{ key: 'API_URL', value: 'https://api.example.com' }]);
-  
+  const [envVars, setEnvVars] = useState([{ key: '', value: '' }]);
+  const [envLoading, setEnvLoading] = useState(false);
+  const [envSuccess, setEnvSuccess] = useState(false);
+  const [envError, setEnvError] = useState(null);
+
+  // AI Preferences state
+  const [defaultModel, setDefaultModel] = useState('openrouter/free');
+  const [maxTurns, setMaxTurns] = useState(25);
+  const [autonomyLevel, setAutonomyLevel] = useState('supervised');
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiSuccess, setAiSuccess] = useState(false);
+  const [aiError, setAiError] = useState(null);
+
   // Profile state
   const [name, setName] = useState('');
   const [username, setUsername] = useState('');
@@ -22,12 +33,108 @@ export default function Settings() {
     }
   }, [user]);
 
+  // Load user settings on mount
+  useEffect(() => {
+    let isMounted = true;
+    const loadSettings = async () => {
+      try {
+        const res = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3000/api'}/settings`, {
+          credentials: 'include'
+        });
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!isMounted) return;
+        if (data.envVars && data.envVars.length > 0) {
+          setEnvVars(data.envVars);
+        }
+        if (data.aiPreferences) {
+          if (data.aiPreferences.defaultModel) setDefaultModel(data.aiPreferences.defaultModel);
+          if (data.aiPreferences.maxTurns) setMaxTurns(data.aiPreferences.maxTurns);
+          if (data.aiPreferences.autonomyLevel) setAutonomyLevel(data.aiPreferences.autonomyLevel);
+        }
+      } catch (err) {
+        console.warn('Failed to load user settings:', err.message);
+      }
+    };
+
+    loadSettings();
+    return () => { isMounted = false; };
+  }, []);
+
   const addEnvVar = () => setEnvVars([...envVars, { key: '', value: '' }]);
-  const removeEnvVar = (index) => setEnvVars(envVars.filter((_, i) => i !== index));
+  const removeEnvVar = (index) => {
+    const updated = envVars.filter((_, i) => i !== index);
+    setEnvVars(updated.length > 0 ? updated : [{ key: '', value: '' }]);
+  };
   const updateEnvVar = (index, field, val) => {
     const newVars = [...envVars];
     newVars[index][field] = val;
     setEnvVars(newVars);
+  };
+
+  const saveEnvironment = async () => {
+    setEnvLoading(true);
+    setEnvError(null);
+    setEnvSuccess(false);
+    try {
+      // Basic check for empty keys
+      for (const item of envVars) {
+        if (!item.key.trim() && item.value.trim()) {
+          throw new Error('Environment variable key cannot be empty');
+        }
+      }
+      const res = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3000/api'}/settings/environment`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ envVars })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to update environment variables');
+      }
+      if (data.envVars) {
+        setEnvVars(data.envVars.length > 0 ? data.envVars : [{ key: '', value: '' }]);
+      }
+      setEnvSuccess(true);
+      setTimeout(() => setEnvSuccess(false), 3000);
+    } catch (err) {
+      setEnvError(err.message);
+    } finally {
+      setEnvLoading(false);
+    }
+  };
+
+  const saveAiPreferences = async () => {
+    setAiLoading(true);
+    setAiError(null);
+    setAiSuccess(false);
+    try {
+      const turns = parseInt(maxTurns, 10);
+      if (isNaN(turns) || turns < 1 || turns > 100) {
+        throw new Error('Max turns must be an integer between 1 and 100');
+      }
+      const res = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3000/api'}/settings/ai`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          defaultModel,
+          maxTurns: turns,
+          autonomyLevel
+        })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to update AI preferences');
+      }
+      setAiSuccess(true);
+      setTimeout(() => setAiSuccess(false), 3000);
+    } catch (err) {
+      setAiError(err.message);
+    } finally {
+      setAiLoading(false);
+    }
   };
 
   const saveProfile = async () => {
@@ -278,6 +385,7 @@ export default function Settings() {
                       <button 
                         onClick={() => removeEnvVar(idx)}
                         className="p-2 text-text-secondary hover:text-red-500 hover:bg-modal rounded-sm transition-colors"
+                        title="Remove variable"
                       >
                         <Trash2 className="w-4 h-4" />
                       </button>
@@ -293,7 +401,20 @@ export default function Settings() {
                   </button>
                 </div>
               </div>
-              <button className="px-4 py-2 bg-primary text-white rounded-sm text-sm hover:bg-opacity-90 transition-colors mt-6">
+
+              {envError && <div className="text-sm text-red-400">{envError}</div>}
+              {envSuccess && (
+                <div className="flex items-center text-sm text-green-400">
+                  <CheckCircle2 className="w-4 h-4 mr-1" /> Environment variables saved successfully
+                </div>
+              )}
+
+              <button
+                onClick={saveEnvironment}
+                disabled={envLoading}
+                className="flex items-center px-4 py-2 bg-primary text-white rounded-sm text-sm hover:bg-opacity-90 transition-colors disabled:opacity-50 mt-6"
+              >
+                {envLoading && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
                 Save Environment
               </button>
             </div>
@@ -304,8 +425,11 @@ export default function Settings() {
               <div>
                 <h2 className="text-lg font-medium text-text-primary mb-1">Default Model</h2>
                 <p className="text-sm text-text-secondary mb-3">Select the default LLM used for engineering tasks.</p>
-                <select className="w-full bg-background border border-border rounded-sm px-3 py-2 text-sm text-text-primary focus:outline-none focus:border-primary appearance-none">
-                  <option value="openrouter/free">OpenRouter Free (Default)</option>
+                <select
+                  value={defaultModel}
+                  onChange={(e) => setDefaultModel(e.target.value)}
+                  className="w-full bg-background border border-border rounded-sm px-3 py-2 text-sm text-text-primary focus:outline-none focus:border-primary appearance-none"
+                >
                   <option value="openrouter/free">OpenRouter Free (Dynamic Auto-Routing)</option>
                   <option value="openai/gpt-oss-20b:free">GPT-OSS 20B (Free Agent & Coding)</option>
                   <option value="z-ai/glm-5.2:free">GLM 5.2 (Free Planning & Reasoning)</option>
@@ -317,10 +441,13 @@ export default function Settings() {
               
               <div>
                 <h2 className="text-lg font-medium text-text-primary mb-1">Max Execution Turns</h2>
-                <p className="text-sm text-text-secondary mb-3">Maximum number of tool iterations per task before pausing for review.</p>
-                <input 
-                  type="number" 
-                  defaultValue={25}
+                <p className="text-sm text-text-secondary mb-3">Maximum number of tool iterations per task before pausing for review (1-100).</p>
+                <input
+                  type="number"
+                  min="1"
+                  max="100"
+                  value={maxTurns}
+                  onChange={(e) => setMaxTurns(e.target.value)}
                   className="w-full bg-background border border-border rounded-sm px-3 py-2 text-sm text-text-primary focus:outline-none focus:border-primary"
                 />
               </div>
@@ -328,15 +455,27 @@ export default function Settings() {
               <div>
                 <h2 className="text-lg font-medium text-text-primary mb-3">Autonomy Level</h2>
                 <div className="space-y-3">
-                  <label className="flex items-start space-x-3 p-3 border border-border rounded-sm cursor-pointer hover:border-primary">
-                    <input type="radio" name="autonomy" defaultChecked className="mt-1" />
+                  <label className={`flex items-start space-x-3 p-3 border rounded-sm cursor-pointer transition-colors ${autonomyLevel === 'supervised' ? 'border-primary bg-primary/5' : 'border-border hover:border-border/80'}`}>
+                    <input
+                      type="radio"
+                      name="autonomy"
+                      checked={autonomyLevel === 'supervised'}
+                      onChange={() => setAutonomyLevel('supervised')}
+                      className="mt-1"
+                    />
                     <div>
                       <div className="text-sm font-medium text-text-primary">Supervised (Default)</div>
                       <div className="text-xs text-text-secondary mt-1">Requires manual approval before running git push or complex commands.</div>
                     </div>
                   </label>
-                  <label className="flex items-start space-x-3 p-3 border border-border rounded-sm cursor-pointer hover:border-primary">
-                    <input type="radio" name="autonomy" className="mt-1" />
+                  <label className={`flex items-start space-x-3 p-3 border rounded-sm cursor-pointer transition-colors ${autonomyLevel === 'autonomous' ? 'border-primary bg-primary/5' : 'border-border hover:border-border/80'}`}>
+                    <input
+                      type="radio"
+                      name="autonomy"
+                      checked={autonomyLevel === 'autonomous'}
+                      onChange={() => setAutonomyLevel('autonomous')}
+                      className="mt-1"
+                    />
                     <div>
                       <div className="text-sm font-medium text-text-primary">Autonomous</div>
                       <div className="text-xs text-text-secondary mt-1">Full autonomy to execute tasks end-to-end without supervision.</div>
@@ -344,8 +483,20 @@ export default function Settings() {
                   </label>
                 </div>
               </div>
+
+              {aiError && <div className="text-sm text-red-400">{aiError}</div>}
+              {aiSuccess && (
+                <div className="flex items-center text-sm text-green-400">
+                  <CheckCircle2 className="w-4 h-4 mr-1" /> AI preferences saved successfully
+                </div>
+              )}
               
-              <button className="px-4 py-2 bg-primary text-white rounded-sm text-sm hover:bg-opacity-90 transition-colors">
+              <button
+                onClick={saveAiPreferences}
+                disabled={aiLoading}
+                className="flex items-center px-4 py-2 bg-primary text-white rounded-sm text-sm hover:bg-opacity-90 transition-colors disabled:opacity-50"
+              >
+                {aiLoading && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
                 Save Preferences
               </button>
             </div>

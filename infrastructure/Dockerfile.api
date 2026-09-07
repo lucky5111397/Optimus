@@ -1,0 +1,23 @@
+FROM node:20-alpine
+
+# Install Git for repository cloning and indexing
+RUN apk add --no-cache git
+
+WORKDIR /app
+
+# Copy dependency manifests
+COPY package*.json ./
+
+# Install production dependencies
+RUN npm install --omit=dev
+
+# Copy application source
+COPY . .
+
+# Expose backend API port
+EXPOSE 3000
+
+ENV PORT=3000 \
+    NODE_ENV=production
+
+CMD ["npm", "start"]

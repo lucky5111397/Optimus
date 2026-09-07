@@ -14,7 +14,6 @@ const mockUserId = new mongoose.Types.ObjectId();
 const workspacePath = path.resolve(__dirname, 'workspaces', mockRepoId.toString());
 
 async function setup() {
-  await mongoose.connect('mongodb://luvy4661_db_user:MPbsT0Mapwbf5Cls@ac-b0c9nvx-shard-00-00.diuevwf.mongodb.net:27017,ac-b0c9nvx-shard-00-01.diuevwf.mongodb.net:27017,ac-b0c9nvx-shard-00-02.diuevwf.mongodb.net:27017/?ssl=true&replicaSet=atlas-68bfiy-shard-0&authSource=admin&appName=Cluster0');
   await mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/optimus');
   
   // 1. Setup workspace
