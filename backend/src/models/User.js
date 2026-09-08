@@ -31,6 +31,14 @@ const userSchema = new mongoose.Schema({
   },
   provider: {
     type: String
+  },
+  role: {
+    type: String,
+    default: 'Software Engineer'
+  },
+  primaryLanguage: {
+    type: String,
+    default: 'JavaScript / TypeScript'
   }
 }, { timestamps: true });
 

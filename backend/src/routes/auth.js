@@ -18,6 +18,7 @@ router.get('/google/callback', (req, res) => res.status(200).json({ message: 'Us
 
 router.get('/me', requireAuth, authController.getMe);
 router.put('/profile', requireAuth, authController.updateProfile);
+router.delete('/account', requireAuth, authController.deleteAccount);
 router.post('/logout', authController.logout);
 
 module.exports = router;

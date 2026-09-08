@@ -15,6 +15,7 @@ router.post('/import', repositoriesController.importRepo);
 router.get('/:id', repositoriesController.getImportedRepo);
 router.get('/:id/file', repositoriesController.getFileContent);
 router.post('/:id/index', repositoriesController.reindexRepo);
+router.delete('/:id', repositoriesController.deleteRepo);
 
 module.exports = router;
 

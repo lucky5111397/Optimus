@@ -1,5 +1,8 @@
 const Task = require('../models/Task');
 const TaskContext = require('../models/TaskContext');
+const TaskPlan = require('../models/TaskPlan');
+const Execution = require('../models/Execution');
+const ExecutionEvent = require('../models/ExecutionEvent');
 const Repository = require('../models/Repository');
 const RepositoryBranch = require('../models/RepositoryBranch');
 
@@ -116,7 +119,6 @@ exports.getTaskContext = async (req, res) => {
 };
 
 const orchestrator = require('../services/orchestrator');
-const TaskPlan = require('../models/TaskPlan');
 
 // POST /api/tasks/:id/plan
 exports.generatePlan = async (req, res) => {
@@ -216,8 +218,6 @@ exports.rejectPlan = async (req, res) => {
   }
 };
 
-const Execution = require('../models/Execution');
-
 // GET /api/tasks/:id/report
 exports.getReport = async (req, res) => {
   try {
@@ -310,3 +310,26 @@ exports.deliverTask = async (req, res) => {
   }
 };
 
+// DELETE /api/tasks/:id
+// Deletes a task and cascades to associated TaskContext, TaskPlan, Execution, and ExecutionEvent records
+exports.deleteTask = async (req, res) => {
+  try {
+    const task = await Task.findOne({ _id: req.params.id, userId: req.userId });
+    if (!task) {
+      return res.status(404).json({ error: 'Task not found' });
+    }
+
+    await Promise.all([
+      ExecutionEvent.deleteMany({ taskId: task._id }),
+      Execution.deleteMany({ taskId: task._id }),
+      TaskPlan.deleteMany({ taskId: task._id }),
+      TaskContext.deleteMany({ taskId: task._id }),
+      Task.deleteOne({ _id: task._id })
+    ]);
+
+    return res.json({ message: 'Task deleted successfully' });
+  } catch (error) {
+    console.error('Delete task error:', error);
+    return res.status(500).json({ error: 'Failed to delete task' });
+  }
+};

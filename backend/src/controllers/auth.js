@@ -1,9 +1,20 @@
 const axios = require('axios');
 const jwt = require('jsonwebtoken');
-const User = require('../models/User');
-
+const fs = require('fs/promises');
+const path = require('path');
 const crypto = require('crypto');
 
+const User = require('../models/User');
+const Repository = require('../models/Repository');
+const RepositoryBranch = require('../models/RepositoryBranch');
+const Task = require('../models/Task');
+const TaskContext = require('../models/TaskContext');
+const TaskPlan = require('../models/TaskPlan');
+const Execution = require('../models/Execution');
+const ExecutionEvent = require('../models/ExecutionEvent');
+const UserSettings = require('../models/UserSettings');
+
+const WORKSPACES_DIR = path.resolve(__dirname, '..', '..', 'workspaces');
 const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
 
 function generateOAuthState(payload = {}) {
@@ -256,7 +267,7 @@ exports.getMe = async (req, res) => {
 // PUT /api/auth/profile
 exports.updateProfile = async (req, res) => {
   try {
-    const { username, name } = req.body;
+    const { username, name, role, primaryLanguage } = req.body;
     const updates = {};
     
     if (username !== undefined) {
@@ -272,6 +283,22 @@ exports.updateProfile = async (req, res) => {
         return res.status(400).json({ error: 'Name must be between 1 and 100 characters.' });
       }
       updates.name = name;
+    }
+
+    if (role !== undefined) {
+      const allowedRoles = ['Software Engineer', 'Engineering Manager', 'CTO / Founder', 'Product Manager', 'Other'];
+      if (typeof role !== 'string' || !allowedRoles.includes(role.trim())) {
+        return res.status(400).json({ error: 'Invalid role specified.' });
+      }
+      updates.role = role.trim();
+    }
+
+    if (primaryLanguage !== undefined) {
+      const allowedLanguages = ['JavaScript / TypeScript', 'Python', 'Go', 'Rust', 'Java / Kotlin', 'Other'];
+      if (typeof primaryLanguage !== 'string' || !allowedLanguages.includes(primaryLanguage.trim())) {
+        return res.status(400).json({ error: 'Invalid primary language specified.' });
+      }
+      updates.primaryLanguage = primaryLanguage.trim();
     }
 
     if (Object.keys(updates).length === 0) {
@@ -292,6 +319,66 @@ exports.updateProfile = async (req, res) => {
   } catch (error) {
     console.error('Update Profile Error:', error);
     res.status(500).json({ error: 'Server error' });
+  }
+};
+
+// DELETE /api/auth/account
+// Cascades deletion across all user-owned repositories, branches, tasks, plans, executions, settings, and disk workspaces
+exports.deleteAccount = async (req, res) => {
+  try {
+    const { confirmUsername } = req.body;
+    const user = await User.findById(req.userId);
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    if (!confirmUsername || confirmUsername.trim() !== user.username) {
+      return res.status(400).json({ error: 'Confirmation username does not match. Account deletion cancelled.' });
+    }
+
+    // 1. Find all repositories belonging to this user
+    const repos = await Repository.find({ userId: req.userId });
+    const repoIds = repos.map(r => r._id);
+
+    // 2. Safely remove physical workspace directories from disk with strict containment checks
+    for (const repo of repos) {
+      const repoIdStr = repo._id.toString();
+      if (/^[0-9a-fA-F]{24}$/.test(repoIdStr)) {
+        const workspacePath = path.resolve(WORKSPACES_DIR, repoIdStr);
+        const wsWithSep = WORKSPACES_DIR.endsWith(path.sep) ? WORKSPACES_DIR : WORKSPACES_DIR + path.sep;
+        // Verify path is strictly a subfolder of WORKSPACES_DIR and not WORKSPACES_DIR itself
+        if (workspacePath !== WORKSPACES_DIR && workspacePath.startsWith(wsWithSep)) {
+          try {
+            await fs.rm(workspacePath, { recursive: true, force: true });
+          } catch (rmErr) {
+            console.warn(`[DeleteAccount] Could not remove workspace directory ${workspacePath}:`, rmErr.message);
+          }
+        }
+      }
+    }
+
+    // 3. Find user's tasks to cascade delete associated plans, contexts, and events
+    const tasks = await Task.find({ userId: req.userId });
+    const taskIds = tasks.map(t => t._id);
+
+    await Promise.all([
+      ExecutionEvent.deleteMany({ userId: req.userId }),
+      Execution.deleteMany({ userId: req.userId }),
+      TaskPlan.deleteMany({ taskId: { $in: taskIds } }),
+      TaskContext.deleteMany({ taskId: { $in: taskIds } }),
+      Task.deleteMany({ userId: req.userId }),
+      RepositoryBranch.deleteMany({ repositoryId: { $in: repoIds } }),
+      Repository.deleteMany({ userId: req.userId }),
+      UserSettings.deleteMany({ userId: req.userId }),
+      User.findByIdAndDelete(req.userId)
+    ]);
+
+    // 4. Clear auth cookie
+    res.clearCookie('token');
+    return res.json({ message: 'Account and all associated repositories, tasks, and settings have been permanently deleted.' });
+  } catch (error) {
+    console.error('Delete Account Error:', error);
+    return res.status(500).json({ error: 'Failed to delete account' });
   }
 };
 

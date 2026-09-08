@@ -4,6 +4,11 @@ const path = require('path');
 const Repository = require('../models/Repository');
 const RepositoryBranch = require('../models/RepositoryBranch');
 const User = require('../models/User');
+const Task = require('../models/Task');
+const TaskContext = require('../models/TaskContext');
+const TaskPlan = require('../models/TaskPlan');
+const Execution = require('../models/Execution');
+const ExecutionEvent = require('../models/ExecutionEvent');
 const { cloneAndIndexRepository } = require('../services/repositoryService');
 const { indexRepository } = require('../context/indexer');
 
@@ -290,3 +295,47 @@ exports.reindexRepo = async (req, res) => {
   }
 };
 
+// DELETE /api/repositories/:id
+// Deletes repository, associated tasks, plans, executions, events, and removes workspace on disk
+exports.deleteRepo = async (req, res) => {
+  try {
+    const repo = await Repository.findOne({ _id: req.params.id, userId: req.userId });
+    if (!repo) {
+      return res.status(404).json({ error: 'Repository not found' });
+    }
+
+    // 1. Find all associated tasks
+    const tasks = await Task.find({ repositoryId: repo._id });
+    const taskIds = tasks.map(t => t._id);
+
+    // 2. Safely remove physical workspace directory with strict containment checks
+    const repoIdStr = repo._id.toString();
+    if (/^[0-9a-fA-F]{24}$/.test(repoIdStr)) {
+      const workspacePath = path.resolve(WORKSPACES_DIR, repoIdStr);
+      const wsWithSep = WORKSPACES_DIR.endsWith(path.sep) ? WORKSPACES_DIR : WORKSPACES_DIR + path.sep;
+      if (workspacePath !== WORKSPACES_DIR && workspacePath.startsWith(wsWithSep)) {
+        try {
+          await fs.rm(workspacePath, { recursive: true, force: true });
+        } catch (rmErr) {
+          console.warn(`[DeleteRepo] Could not remove workspace directory ${workspacePath}:`, rmErr.message);
+        }
+      }
+    }
+
+    // 3. Cascade delete database records
+    await Promise.all([
+      ExecutionEvent.deleteMany({ taskId: { $in: taskIds } }),
+      Execution.deleteMany({ repositoryId: repo._id }),
+      TaskPlan.deleteMany({ taskId: { $in: taskIds } }),
+      TaskContext.deleteMany({ taskId: { $in: taskIds } }),
+      Task.deleteMany({ repositoryId: repo._id }),
+      RepositoryBranch.deleteMany({ repositoryId: repo._id }),
+      Repository.deleteOne({ _id: repo._id })
+    ]);
+
+    return res.json({ message: 'Repository and all associated tasks deleted successfully' });
+  } catch (error) {
+    console.error('Delete repository error:', error);
+    return res.status(500).json({ error: 'Failed to delete repository' });
+  }
+};

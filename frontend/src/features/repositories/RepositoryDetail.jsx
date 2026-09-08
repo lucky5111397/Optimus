@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, Link } from 'react-router-dom';
-import { ArrowLeft, GitFork, Layout, FileCode2, BookOpen, CheckSquare, Search, Box, Layers, RefreshCw, CheckCircle2 } from 'lucide-react';
+import { useParams, Link, useNavigate } from 'react-router-dom';
+import { ArrowLeft, GitFork, Layout, FileCode2, BookOpen, CheckSquare, Search, Box, Layers, RefreshCw, CheckCircle2, Trash2, AlertTriangle, Loader2 } from 'lucide-react';
 import { StatusBadge } from '../../components/ui';
 import CodebaseExplorer from './CodebaseExplorer';
 import TaskPanel from '../tasks/TaskPanel';
 
 export default function RepositoryDetail() {
   const { id } = useParams();
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('overview');
   const [repoData, setRepoData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -14,6 +15,8 @@ export default function RepositoryDetail() {
   const [reindexMessage, setReindexMessage] = useState(null);
   const [readmeContent, setReadmeContent] = useState(null);
   const [symbolFilter, setSymbolFilter] = useState('');
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   const fetchRepo = () => {
     return fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3000/api'}/repositories/${id}`, {
@@ -74,6 +77,27 @@ export default function RepositoryDetail() {
       setReindexMessage('Network error');
     } finally {
       setIsReindexing(false);
+    }
+  };
+
+  const handleDeleteRepo = async () => {
+    setDeleting(true);
+    try {
+      const res = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3000/api'}/repositories/${id}`, {
+        method: 'DELETE',
+        credentials: 'include'
+      });
+      if (res.ok) {
+        navigate('/repositories');
+      } else {
+        const err = await res.json().catch(() => ({}));
+        alert(err.error || 'Failed to delete repository');
+      }
+    } catch (e) {
+      alert('Network error while deleting repository');
+    } finally {
+      setDeleting(false);
+      setShowDeleteModal(false);
     }
   };
 
@@ -175,6 +199,14 @@ export default function RepositoryDetail() {
             >
               <RefreshCw size={13} className={isReindexing ? 'animate-spin text-primary' : ''} />
               {isReindexing ? 'Indexing...' : 'Re-index'}
+            </button>
+            <button
+              onClick={() => setShowDeleteModal(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-mono rounded-sm border border-red-500/30 bg-red-500/10 hover:bg-red-500/20 text-red-400 transition-colors"
+              title="Delete Repository"
+            >
+              <Trash2 size={13} />
+              Delete Repo
             </button>
           </div>
         </header>
@@ -289,6 +321,42 @@ export default function RepositoryDetail() {
           {activeTab === 'tasks' && <TaskPanel repositoryId={repo._id} />}
         </main>
       </div>
+
+      {showDeleteModal && (
+        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-modal border border-border rounded-lg max-w-md w-full p-6 shadow-modal space-y-4">
+            <div className="flex items-center gap-3 text-red-400">
+              <AlertTriangle className="w-6 h-6 shrink-0" />
+              <h3 className="font-heading font-semibold text-lg text-text-primary">Delete Repository</h3>
+            </div>
+
+            <p className="text-sm text-text-secondary">
+              Are you sure you want to delete <strong className="text-text-primary">{repo.owner}/{repo.name}</strong>?
+            </p>
+            <p className="text-xs text-text-secondary bg-surface border border-border p-3 rounded">
+              This action will permanently delete all associated engineering tasks, generated plans, execution logs, and indexed repository workspace files on disk.
+            </p>
+
+            <div className="flex justify-end gap-3 pt-2">
+              <button
+                onClick={() => setShowDeleteModal(false)}
+                disabled={deleting}
+                className="px-4 py-2 text-xs font-medium text-text-secondary hover:text-text-primary transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDeleteRepo}
+                disabled={deleting}
+                className="flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white rounded-sm text-xs font-semibold transition-colors"
+              >
+                {deleting && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                Delete Repository
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

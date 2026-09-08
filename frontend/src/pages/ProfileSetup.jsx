@@ -9,12 +9,16 @@ export default function ProfileSetup() {
   const [loading, setLoading] = useState(false);
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
+  const [role, setRole] = useState('Software Engineer');
+  const [primaryLanguage, setPrimaryLanguage] = useState('JavaScript / TypeScript');
   const [error, setError] = useState('');
   
   useEffect(() => {
     if (user) {
       setName(user.name || '');
       setEmail(user.email || '');
+      if (user.role) setRole(user.role);
+      if (user.primaryLanguage) setPrimaryLanguage(user.primaryLanguage);
     }
   }, [user]);
 
@@ -27,7 +31,7 @@ export default function ProfileSetup() {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({ name })
+        body: JSON.stringify({ name, role, primaryLanguage })
       });
       if (res.ok) {
         await fetchUser();
@@ -111,12 +115,16 @@ export default function ProfileSetup() {
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                   <Briefcase className="h-4 w-4 text-gray-500" />
                 </div>
-                <select className="block w-full pl-10 pr-3 py-2 bg-background border border-border rounded-md text-sm text-text-primary focus:outline-none focus:border-primary transition-colors appearance-none">
-                  <option>Software Engineer</option>
-                  <option>Engineering Manager</option>
-                  <option>CTO / Founder</option>
-                  <option>Product Manager</option>
-                  <option>Other</option>
+                <select
+                  value={role}
+                  onChange={(e) => setRole(e.target.value)}
+                  className="block w-full pl-10 pr-3 py-2 bg-background border border-border rounded-md text-sm text-text-primary focus:outline-none focus:border-primary transition-colors appearance-none"
+                >
+                  <option value="Software Engineer">Software Engineer</option>
+                  <option value="Engineering Manager">Engineering Manager</option>
+                  <option value="CTO / Founder">CTO / Founder</option>
+                  <option value="Product Manager">Product Manager</option>
+                  <option value="Other">Other</option>
                 </select>
               </div>
             </div>
@@ -129,13 +137,17 @@ export default function ProfileSetup() {
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                   <Code className="h-4 w-4 text-gray-500" />
                 </div>
-                <select className="block w-full pl-10 pr-3 py-2 bg-background border border-border rounded-md text-sm text-text-primary focus:outline-none focus:border-primary transition-colors appearance-none">
-                  <option>JavaScript / TypeScript</option>
-                  <option>Python</option>
-                  <option>Go</option>
-                  <option>Rust</option>
-                  <option>Java / Kotlin</option>
-                  <option>Other</option>
+                <select
+                  value={primaryLanguage}
+                  onChange={(e) => setPrimaryLanguage(e.target.value)}
+                  className="block w-full pl-10 pr-3 py-2 bg-background border border-border rounded-md text-sm text-text-primary focus:outline-none focus:border-primary transition-colors appearance-none"
+                >
+                  <option value="JavaScript / TypeScript">JavaScript / TypeScript</option>
+                  <option value="Python">Python</option>
+                  <option value="Go">Go</option>
+                  <option value="Rust">Rust</option>
+                  <option value="Java / Kotlin">Java / Kotlin</option>
+                  <option value="Other">Other</option>
                 </select>
               </div>
             </div>

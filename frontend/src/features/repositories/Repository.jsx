@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { GitFork, Star, FileText, ArrowRight, RefreshCw, Plus } from 'lucide-react';
+import { GitFork, Star, FileText, ArrowRight, RefreshCw, Plus, Trash2, AlertTriangle, Loader2 } from 'lucide-react';
 import { StatusBadge, EmptyState, SectionHeader } from '../../components/ui';
 import ImportModal from './ImportModal';
 
@@ -8,6 +8,9 @@ export default function Repository() {
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [repos, setRepos] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [repoToDelete, setRepoToDelete] = useState(null);
+  const [deleting, setDeleting] = useState(false);
+  const [retryingRepoId, setRetryingRepoId] = useState(null);
 
   const fetchRepos = async () => {
     try {
@@ -31,6 +34,50 @@ export default function Repository() {
 
   const handleImported = () => {
     fetchRepos();
+  };
+
+  const handleRetryImport = async (repo) => {
+    const repoId = repo._id || repo.id;
+    setRetryingRepoId(repoId);
+    try {
+      const res = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3000/api'}/repositories/import`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          owner: repo.owner,
+          name: repo.name,
+          branch: repo.defaultBranch || 'main'
+        })
+      });
+      if (res.ok) {
+        fetchRepos();
+      }
+    } catch (err) {
+      console.error('Failed to retry import', err);
+    } finally {
+      setRetryingRepoId(null);
+    }
+  };
+
+  const handleDeleteRepo = async () => {
+    if (!repoToDelete) return;
+    setDeleting(true);
+    try {
+      const id = repoToDelete._id || repoToDelete.id;
+      const res = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3000/api'}/repositories/${id}`, {
+        method: 'DELETE',
+        credentials: 'include'
+      });
+      if (res.ok) {
+        setRepoToDelete(null);
+        fetchRepos();
+      }
+    } catch (err) {
+      console.error('Failed to delete repository', err);
+    } finally {
+      setDeleting(false);
+    }
   };
 
   return (
@@ -82,7 +129,16 @@ export default function Repository() {
                       {repo.description || 'No description provided.'}
                     </p>
                   </div>
-                  <StatusBadge status={repo.status} />
+                  <div className="flex items-center gap-2 shrink-0">
+                    <StatusBadge status={repo.status} />
+                    <button
+                      onClick={() => setRepoToDelete(repo)}
+                      title="Delete Repository"
+                      className="p-1.5 text-text-secondary hover:text-red-400 hover:bg-modal rounded transition-colors"
+                    >
+                      <Trash2 size={15} />
+                    </button>
+                  </div>
                 </div>
                 
                 <div className="flex items-center gap-4 text-text-secondary text-xs mt-auto mb-4 font-mono">
@@ -119,8 +175,13 @@ export default function Repository() {
                   </span>
                 )}
                 {repo.status === 'FAILED' && (
-                  <button className="flex items-center gap-1 text-red-400 text-sm hover:underline font-medium">
-                    <RefreshCw size={14} /> Retry
+                  <button
+                    onClick={() => handleRetryImport(repo)}
+                    disabled={retryingRepoId === repoId}
+                    className="flex items-center gap-1 text-red-400 text-sm hover:underline font-medium disabled:opacity-50"
+                  >
+                    <RefreshCw size={14} className={retryingRepoId === repoId ? 'animate-spin' : ''} />
+                    {retryingRepoId === repoId ? 'Retrying...' : 'Retry'}
                   </button>
                 )}
               </div>
@@ -135,6 +196,42 @@ export default function Repository() {
           onClose={() => setIsImportModalOpen(false)}
           onImported={handleImported}
         />
+      )}
+
+      {repoToDelete && (
+        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-modal border border-border rounded-lg max-w-md w-full p-6 shadow-modal space-y-4">
+            <div className="flex items-center gap-3 text-red-400">
+              <AlertTriangle className="w-6 h-6 shrink-0" />
+              <h3 className="font-heading font-semibold text-lg text-text-primary">Delete Repository</h3>
+            </div>
+
+            <p className="text-sm text-text-secondary">
+              Are you sure you want to delete <strong className="text-text-primary">{repoToDelete.owner}/{repoToDelete.name}</strong>?
+            </p>
+            <p className="text-xs text-text-secondary bg-surface border border-border p-3 rounded">
+              This action will permanently delete all associated engineering tasks, generated plans, execution logs, and indexed repository workspace files on disk.
+            </p>
+
+            <div className="flex justify-end gap-3 pt-2">
+              <button
+                onClick={() => setRepoToDelete(null)}
+                disabled={deleting}
+                className="px-4 py-2 text-xs font-medium text-text-secondary hover:text-text-primary transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDeleteRepo}
+                disabled={deleting}
+                className="flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white rounded-sm text-xs font-semibold transition-colors"
+              >
+                {deleting && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                Delete Repository
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

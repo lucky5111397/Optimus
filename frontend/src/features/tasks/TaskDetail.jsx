@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ArrowLeft, Play, CheckCircle2, XCircle, Clock, Eye, FileText, GitPullRequest, Loader2, GitMerge, AlertTriangle, ExternalLink, ShieldCheck } from 'lucide-react';
+import { ArrowLeft, Play, CheckCircle2, XCircle, Clock, Eye, FileText, GitPullRequest, Loader2, GitMerge, AlertTriangle, ExternalLink, ShieldCheck, Trash2 } from 'lucide-react';
 import { StatusBadge } from '../../components/ui';
 import ImplementationPlan from './ImplementationPlan';
 import LiveExecution from './LiveExecution';
@@ -8,6 +8,29 @@ export default function TaskDetail({ task, onBack }) {
   const [currentStatus, setCurrentStatus] = useState(task.status);
   const [showDiff, setShowDiff] = useState(false);
   const [loadingAction, setLoadingAction] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
+  const handleDeleteTask = async () => {
+    setDeleting(true);
+    try {
+      const res = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3000/api'}/tasks/${task._id}`, {
+        method: 'DELETE',
+        credentials: 'include'
+      });
+      if (res.ok) {
+        onBack();
+      } else {
+        const err = await res.json().catch(() => ({}));
+        alert(err.error || 'Failed to delete task');
+      }
+    } catch (e) {
+      alert('Network error while deleting task');
+    } finally {
+      setDeleting(false);
+      setShowDeleteModal(false);
+    }
+  };
 
   // Poll for status updates if in a transitional state
   useEffect(() => {
@@ -514,7 +537,16 @@ export default function TaskDetail({ task, onBack }) {
             <div className="text-xs text-text-secondary font-mono mt-0.5">ID: {task._id}</div>
           </div>
         </div>
-        <StatusBadge status={currentStatus} />
+        <div className="flex items-center gap-3">
+          <StatusBadge status={currentStatus} />
+          <button
+            onClick={() => setShowDeleteModal(true)}
+            className="p-1.5 text-text-secondary hover:text-red-400 hover:bg-surface rounded transition-colors"
+            title="Delete Task"
+          >
+            <Trash2 size={16} />
+          </button>
+        </div>
       </div>
 
       <div className="flex-1 overflow-y-auto">
@@ -541,6 +573,42 @@ export default function TaskDetail({ task, onBack }) {
         
         {currentStatus === 'FAILED' && <FailedView />}
       </div>
+
+      {showDeleteModal && (
+        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-modal border border-border rounded-lg max-w-md w-full p-6 shadow-modal space-y-4">
+            <div className="flex items-center gap-3 text-red-400">
+              <AlertTriangle className="w-6 h-6 shrink-0" />
+              <h3 className="font-heading font-semibold text-lg text-text-primary">Delete Task</h3>
+            </div>
+
+            <p className="text-sm text-text-secondary">
+              Are you sure you want to delete <strong className="text-text-primary">"{task.title}"</strong>?
+            </p>
+            <p className="text-xs text-text-secondary bg-surface border border-border p-3 rounded">
+              This will permanently remove the task context, implementation plan, execution records, logs, and audit trails.
+            </p>
+
+            <div className="flex justify-end gap-3 pt-2">
+              <button
+                onClick={() => setShowDeleteModal(false)}
+                disabled={deleting}
+                className="px-4 py-2 text-xs font-medium text-text-secondary hover:text-text-primary transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDeleteTask}
+                disabled={deleting}
+                className="flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white rounded-sm text-xs font-semibold transition-colors"
+              >
+                {deleting && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                Delete Task
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
