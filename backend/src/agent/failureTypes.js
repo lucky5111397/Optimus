@@ -91,41 +91,55 @@ function formatFailureDiagnostics(error, options = {}) {
   let code = 'EXEC_ERR';
   let retryable = false;
   let userMessage = 'The task execution failed. Please check the logs or retry.';
+  let suggestedAction = 'Review the failure logs in the Agent Terminal and retry execution.';
 
   switch (category) {
     case FailureTypes.CONFIGURATION_FAILURE:
       code = 'CONFIG_MISSING';
       userMessage = 'Execution failed due to missing configuration or API keys.';
+      suggestedAction = 'Configure OPENROUTER_API_KEY in backend/.env to enable live code execution.';
       retryable = false;
       break;
     case FailureTypes.AUTHENTICATION_FAILURE:
       code = 'AUTH_REQUIRED';
       userMessage = 'Authentication with the upstream AI provider failed.';
+      suggestedAction = 'Verify your AI API key and model permissions in backend/.env.';
       retryable = false;
       break;
     case FailureTypes.RATE_LIMIT_FAILURE:
       code = 'RATE_LIMITED';
       userMessage = 'AI provider rate limit reached. Please wait a moment and retry.';
+      suggestedAction = 'Wait 30-60 seconds for provider limits to replenish, then click Retry Execution.';
       retryable = true;
       break;
     case FailureTypes.TIMEOUT_FAILURE:
       code = 'EXEC_TIMEOUT';
       userMessage = 'Execution timed out before completing the step.';
+      suggestedAction = 'Decompose this task into smaller, modular steps or retry.';
       retryable = true;
       break;
     case FailureTypes.VALIDATION_FAILURE:
     case FailureTypes.SELF_CORRECTION_EXHAUSTED:
       code = 'VALIDATION_FAILED';
       userMessage = 'Code changes did not pass automated verification tests.';
+      suggestedAction = 'Inspect the failing test output in the Agent Terminal and adjust plan requirements.';
       retryable = true;
       break;
     case FailureTypes.EXECUTION_BUDGET_EXHAUSTED:
       code = 'BUDGET_EXCEEDED';
       userMessage = 'Execution exceeded the safety turn or tool call limit.';
+      suggestedAction = 'Break the task down into smaller discrete goals or retry with higher turn limits.';
       retryable = false;
+      break;
+    case FailureTypes.REPEATED_TOOL_LOOP:
+      code = 'TOOL_LOOP';
+      userMessage = 'The agent repeated the same tool call multiple times without progress.';
+      suggestedAction = 'Refine the task instructions to provide clearer file targets or retry with a different model.';
+      retryable = true;
       break;
     default:
       code = 'EXEC_FAILED';
+      suggestedAction = 'Review the failure logs in the Agent Terminal and retry execution.';
       retryable = false;
   }
 
@@ -133,7 +147,9 @@ function formatFailureDiagnostics(error, options = {}) {
     category,
     code,
     userMessage,
+    message: userMessage,
     diagnosticSummary: msg.length > 300 ? msg.substring(0, 300) + '...' : msg,
+    suggestedAction,
     retryable,
     traceId
   };

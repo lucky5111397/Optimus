@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ArrowLeft, Play, CheckCircle2, XCircle, Clock, Eye, FileText, GitPullRequest, Loader2, GitMerge, AlertTriangle, ExternalLink, ShieldCheck, Trash2 } from 'lucide-react';
+import { ArrowLeft, Play, CheckCircle2, XCircle, Clock, Eye, FileText, GitPullRequest, Loader2, GitMerge, AlertTriangle, ExternalLink, ShieldCheck, Trash2, RotateCcw, Copy, Check } from 'lucide-react';
 import { StatusBadge } from '../../components/ui';
 import ImplementationPlan from './ImplementationPlan';
 import LiveExecution from './LiveExecution';
@@ -134,7 +134,7 @@ export default function TaskDetail({ task, onBack }) {
     <div className="p-8 max-w-2xl mx-auto mt-10 space-y-8">
       <div className="bg-background border border-border rounded-md p-8 shadow-modal text-center relative overflow-hidden">
         <div className="absolute inset-0 bg-primary/5 animate-pulse"></div>
-        
+
         <div className="relative z-10">
           <div className="flex justify-center gap-2 mb-6">
             <div className="w-3 h-3 rounded-full bg-primary animate-bounce" style={{ animationDelay: '0ms' }}></div>
@@ -145,15 +145,15 @@ export default function TaskDetail({ task, onBack }) {
             {currentStatus === 'PLANNING' ? 'Generating Implementation Plan...' : 'Analyzing Codebase...'}
           </h2>
           <p className="text-sm text-text-secondary">
-            {currentStatus === 'PLANNING' 
-              ? 'OPTIMUS is synthesizing repository context and formulating a technical plan.' 
+            {currentStatus === 'PLANNING'
+              ? 'OPTIMUS is synthesizing repository context and formulating a technical plan.'
               : 'OPTIMUS is processing context and building a mental model.'}
           </p>
         </div>
       </div>
 
       <div className="space-y-4">
-        {(currentStatus === 'PLANNING' 
+        {(currentStatus === 'PLANNING'
           ? ['Reading repository AST & file index', 'Filtering sensitive paths & secrets', 'Formulating technical implementation steps', 'Computing tamper-proof plan checksum']
           : ['Reading file tree', 'Extracting symbols', 'Building dependency graph', 'Identifying affected files']
         ).map((step, i) => (
@@ -165,10 +165,10 @@ export default function TaskDetail({ task, onBack }) {
           </div>
         ))}
       </div>
-      
+
       {currentStatus === 'CONTEXT_READY' && (
         <div className="mt-8 flex justify-center">
-          <button 
+          <button
             onClick={generatePlan}
             disabled={loadingAction}
             className="flex items-center gap-2 px-6 py-2.5 bg-primary text-text-primary rounded-sm hover:bg-opacity-90 font-medium disabled:opacity-50"
@@ -182,6 +182,7 @@ export default function TaskDetail({ task, onBack }) {
   );
 
   const CompletedView = () => {
+    const [completedSubTab, setCompletedSubTab] = useState('review'); // 'review' | 'logs'
     const [review, setReview] = useState(null);
     const [loadingReview, setLoadingReview] = useState(true);
     const [deliveryState, setDeliveryState] = useState(task.status === 'DELIVERED' || task.prUrl ? 'pr_created' : 'review');
@@ -247,7 +248,7 @@ export default function TaskDetail({ task, onBack }) {
             <p className="text-sm text-text-secondary mb-4">
               Verified changes have been committed, pushed to branch, and a Pull Request was opened against <span className="font-mono text-text-primary">{review?.targetBranch || 'main'}</span>.
             </p>
-            
+
             <div className="flex flex-wrap items-center justify-center gap-2 mb-6">
               {activePrNumber && (
                 <div className="inline-block px-3 py-1 bg-surface border border-border rounded text-xs font-mono text-primary">
@@ -267,14 +268,14 @@ export default function TaskDetail({ task, onBack }) {
             </div>
 
             <div className="flex justify-center gap-4">
-              <button 
+              <button
                 onClick={onBack}
                 className="px-6 py-2 bg-surface border border-border text-text-primary rounded-sm hover:border-primary transition-colors text-sm"
               >
                 Back to Tasks
               </button>
               {activePrUrl && (
-                <a 
+                <a
                   href={activePrUrl}
                   target="_blank"
                   rel="noopener noreferrer"
@@ -303,8 +304,54 @@ export default function TaskDetail({ task, onBack }) {
     const changedFiles = review?.filesChanged || [];
     const validationRuns = review?.validationResults?.runs || [];
 
+    if (completedSubTab === 'logs') {
+      return (
+        <div className="p-6 max-w-5xl mx-auto space-y-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-1 bg-background border border-border rounded-sm p-0.5">
+              <button
+                onClick={() => setCompletedSubTab('review')}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-sm text-xs font-medium text-text-secondary hover:text-text-primary transition-colors"
+              >
+                <GitPullRequest className="w-3.5 h-3.5" />
+                <span>Patch Review</span>
+              </button>
+              <button
+                onClick={() => setCompletedSubTab('logs')}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-sm text-xs font-medium bg-surface text-primary border border-border shadow-sm transition-colors"
+              >
+                <FileText className="w-3.5 h-3.5" />
+                <span>Execution Logs & Telemetry</span>
+              </button>
+            </div>
+          </div>
+          <LiveExecution taskId={task._id} readOnly={true} />
+        </div>
+      );
+    }
+
     return (
       <div className="p-6 max-w-4xl mx-auto space-y-6">
+        {/* Sub-navigation Switcher */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-1 bg-background border border-border rounded-sm p-0.5">
+            <button
+              onClick={() => setCompletedSubTab('review')}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-sm text-xs font-medium bg-surface text-primary border border-border shadow-sm transition-colors"
+            >
+              <GitPullRequest className="w-3.5 h-3.5" />
+              <span>Patch Review</span>
+            </button>
+            <button
+              onClick={() => setCompletedSubTab('logs')}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-sm text-xs font-medium text-text-secondary hover:text-text-primary transition-colors"
+            >
+              <FileText className="w-3.5 h-3.5" />
+              <span>Execution Logs & Telemetry</span>
+            </button>
+          </div>
+        </div>
+
         {/* Verification & Review Header */}
         <div className="bg-background border border-green-500/30 rounded-md p-6 shadow-modal">
           <div className="flex items-start gap-4">
@@ -321,7 +368,7 @@ export default function TaskDetail({ task, onBack }) {
               <p className="text-sm text-text-secondary mb-4">
                 The agent completed all implementation steps and automated verification passed. Inspect the real working-tree diff and validation results before delivering to GitHub.
               </p>
-              
+
               {/* Metrics Grid */}
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
                 <div className="p-3 bg-surface border border-border rounded-sm">
@@ -400,14 +447,14 @@ export default function TaskDetail({ task, onBack }) {
 
               {/* Actions Bar */}
               <div className="flex flex-wrap items-center gap-3 pt-2">
-                <button 
+                <button
                   onClick={() => setShowDiff(!showDiff)}
                   className="flex items-center gap-2 px-4 py-2 bg-surface border border-border text-text-primary rounded-sm hover:border-primary transition-colors text-sm"
                 >
                   <Eye className="w-4 h-4" />
                   {showDiff ? 'Hide Patch Review' : 'View Patch Review'}
                 </button>
-                <button 
+                <button
                   onClick={handleDeliver}
                   disabled={!ready || delivering}
                   className="flex items-center gap-2 px-6 py-2 bg-primary text-white rounded-sm hover:bg-opacity-90 transition-colors text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
@@ -499,34 +546,148 @@ export default function TaskDetail({ task, onBack }) {
     );
   };
 
-  const FailedView = () => (
-    <div className="p-6 max-w-4xl mx-auto space-y-6">
-      <div className="bg-background border border-red-500/30 rounded-md p-6 shadow-modal">
-        <div className="flex items-start gap-4">
-          <div className="p-2 bg-red-500/10 rounded-full">
-            <XCircle className="w-6 h-6 text-red-400" />
-          </div>
-          <div className="flex-1">
-            <h2 className="text-lg font-medium text-red-400 mb-1">Execution Failed</h2>
-            <p className="text-sm text-text-secondary mb-4">An unexpected error occurred during execution.</p>
-            
-            <button 
-              onClick={() => setCurrentStatus('RUNNING')}
-              className="px-4 py-2 bg-primary text-text-primary rounded-sm hover:bg-opacity-90 transition-colors text-sm"
-            >
-              Retry Execution
-            </button>
+  const FailedView = () => {
+    const [execData, setExecData] = useState(null);
+    const [retrying, setRetrying] = useState(false);
+    const [retryError, setRetryError] = useState(null);
+    const [showLogs, setShowLogs] = useState(false);
+    const [copiedTrace, setCopiedTrace] = useState(false);
+
+    useEffect(() => {
+      fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3000/api'}/tasks/${task._id}/execution`, {
+        credentials: 'include'
+      })
+        .then(res => res.json())
+        .then(data => setExecData(data))
+        .catch(err => console.error('Failed to load execution failure details:', err));
+    }, [task._id]);
+
+    const handleRetry = async () => {
+      setRetrying(true);
+      setRetryError(null);
+      try {
+        const res = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3000/api'}/tasks/${task._id}/execute`, {
+          method: 'POST',
+          credentials: 'include'
+        });
+        if (res.ok) {
+          setCurrentStatus('RUNNING');
+        } else {
+          const errData = await res.json().catch(() => ({}));
+          setRetryError(errData.error || 'Failed to restart execution');
+        }
+      } catch (err) {
+        setRetryError(err.message || 'Network error while attempting retry');
+      } finally {
+        setRetrying(false);
+      }
+    };
+
+    const handleCopyTrace = () => {
+      if (!execData?.traceId) return;
+      navigator.clipboard.writeText(execData.traceId);
+      setCopiedTrace(true);
+      setTimeout(() => setCopiedTrace(false), 2000);
+    };
+
+    const failureCategory = execData?.failureDetails?.category || execData?.metadata?.failureCategory || 'EXECUTION_FAILED';
+    const failureMessage = execData?.failureDetails?.message || execData?.error || 'An unexpected error occurred during execution.';
+    const suggestedAction = execData?.failureDetails?.suggestedAction;
+
+    return (
+      <div className="p-6 max-w-4xl mx-auto space-y-6">
+        <div className="bg-background border border-red-500/30 rounded-md p-6 shadow-modal">
+          <div className="flex items-start gap-4">
+            <div className="p-2 bg-red-500/10 rounded-full flex-none">
+              <XCircle className="w-6 h-6 text-red-400" />
+            </div>
+            <div className="flex-1 space-y-4">
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <div className="flex items-center gap-2">
+                  <h2 className="text-lg font-heading font-medium text-red-400">Execution Failed</h2>
+                  <span className="text-xs font-mono px-2 py-0.5 bg-red-500/10 text-red-400 border border-red-500/20 rounded">
+                    {failureCategory}
+                  </span>
+                </div>
+
+                {execData?.traceId && (
+                  <div className="flex items-center gap-1.5 text-xs font-mono bg-surface border border-border px-2.5 py-1 rounded">
+                    <span className="text-text-secondary opacity-60">trace:</span>
+                    <span className="text-red-300 font-medium">{execData.traceId}</span>
+                    <button
+                      onClick={handleCopyTrace}
+                      title="Copy Trace ID"
+                      className="text-text-secondary hover:text-text-primary p-0.5 rounded transition-colors ml-1"
+                    >
+                      {copiedTrace ? <Check className="w-3.5 h-3.5 text-green-400" /> : <Copy className="w-3.5 h-3.5" />}
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              <div className="p-3 bg-surface border border-border rounded text-xs font-mono text-text-primary leading-relaxed whitespace-pre-wrap">
+                {failureMessage}
+              </div>
+
+              {suggestedAction && (
+                <div className="p-3 bg-primary/5 border border-primary/20 rounded text-xs space-y-1">
+                  <div className="text-primary font-medium flex items-center gap-1.5">
+                    <AlertTriangle className="w-3.5 h-3.5" />
+                    Recommended Action:
+                  </div>
+                  <p className="text-text-secondary leading-relaxed">
+                    {suggestedAction}
+                  </p>
+                </div>
+              )}
+
+              {retryError && (
+                <div className="p-3 bg-red-500/10 border border-red-500/30 rounded text-xs text-red-300 flex items-center gap-2">
+                  <AlertTriangle className="w-4 h-4 text-red-400 flex-none" />
+                  <span>{retryError}</span>
+                </div>
+              )}
+
+              <div className="flex items-center gap-3 pt-2">
+                <button
+                  onClick={handleRetry}
+                  disabled={retrying}
+                  className="flex items-center gap-2 px-6 py-2 bg-primary text-white rounded-sm hover:bg-opacity-90 font-medium text-sm transition-colors disabled:opacity-50"
+                >
+                  {retrying ? <Loader2 className="w-4 h-4 animate-spin" /> : <RotateCcw className="w-4 h-4" />}
+                  {retrying ? 'Restarting Execution...' : 'Retry Execution'}
+                </button>
+
+                <button
+                  onClick={() => setShowLogs(!showLogs)}
+                  className="flex items-center gap-2 px-4 py-2 bg-surface border border-border text-text-primary rounded-sm hover:border-primary transition-colors text-sm"
+                >
+                  <FileText className="w-4 h-4" />
+                  {showLogs ? 'Hide Failure Logs' : 'Inspect Execution Logs'}
+                </button>
+              </div>
+            </div>
           </div>
         </div>
+
+        {showLogs && (
+          <div className="border border-border rounded-md overflow-hidden bg-background shadow-modal">
+            <div className="px-4 py-2.5 bg-surface border-b border-border text-xs font-mono text-text-secondary flex items-center justify-between">
+              <span>Failure Transcript & Telemetry</span>
+              <span className="text-[11px] text-text-secondary">Read-only view</span>
+            </div>
+            <LiveExecution taskId={task._id} readOnly={true} />
+          </div>
+        )}
       </div>
-    </div>
-  );
+    );
+  };
 
   return (
     <div className="h-full flex flex-col bg-surface overflow-hidden">
       <div className="flex-none px-6 py-4 border-b border-border bg-background flex items-center justify-between">
         <div className="flex items-center gap-4">
-          <button 
+          <button
             onClick={onBack}
             className="p-1.5 hover:bg-surface rounded-sm text-text-secondary hover:text-text-primary transition-colors"
           >
@@ -551,26 +712,26 @@ export default function TaskDetail({ task, onBack }) {
 
       <div className="flex-1 overflow-y-auto">
         {(currentStatus === 'CONTEXT_READY' || currentStatus === 'ANALYZING' || currentStatus === 'PLANNING') && <AnalyzingState />}
-        
+
         {(currentStatus === 'PLAN_READY' || currentStatus === 'AWAITING_APPROVAL') && (
-          <ImplementationPlan 
+          <ImplementationPlan
             taskId={task._id}
             onApprove={approvePlan}
             onReject={rejectPlan}
             loading={loadingAction}
           />
         )}
-        
+
         {['IMPLEMENTING', 'TESTING', 'VALIDATING', 'RUNNING', 'DIAGNOSING', 'RETRYING', 'VERIFYING'].includes(currentStatus) && (
-          <LiveExecution 
+          <LiveExecution
             taskId={task._id}
-            onComplete={() => setCurrentStatus('VERIFIED')} 
+            onComplete={() => setCurrentStatus('VERIFIED')}
             onFailed={() => setCurrentStatus('FAILED')}
           />
         )}
-        
+
         {(currentStatus === 'COMPLETED' || currentStatus === 'VERIFIED' || currentStatus === 'DELIVERED') && <CompletedView />}
-        
+
         {currentStatus === 'FAILED' && <FailedView />}
       </div>
 

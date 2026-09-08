@@ -144,34 +144,53 @@ function resetSequenceCounter(executionId) {
 }
 
 /**
- * Retrieves paginated, immutable audit events for an execution.
+ * Retrieves paginated or incremental immutable audit events for an execution.
  */
 async function getExecutionEvents(executionId, options = {}) {
-  const page = Math.max(1, parseInt(options.page, 10) || 1);
-  const limit = Math.min(100, Math.max(1, parseInt(options.limit, 10) || 50));
-  const skip = (page - 1) * limit;
-
   const query = { executionId };
   if (options.eventType) {
     query.eventType = options.eventType;
   }
 
-  const [events, total] = await Promise.all([
-    ExecutionEvent.find(query)
-      .sort({ sequenceNumber: 1 })
-      .skip(skip)
-      .limit(limit)
-      .lean(),
-    ExecutionEvent.countDocuments(query)
-  ]);
+  // Support incremental cursor polling via sinceSequence
+  if (options.sinceSequence !== undefined && options.sinceSequence !== null) {
+    const seq = parseInt(options.sinceSequence, 10);
+    if (!isNaN(seq) && seq >= 0) {
+      query.sequenceNumber = { $gt: seq };
+    }
+  }
 
-  return {
-    events,
-    total,
-    page,
-    limit,
-    totalPages: Math.ceil(total / limit)
-  };
+  const limit = Math.min(200, Math.max(1, parseInt(options.limit, 10) || (options.page ? 50 : 200)));
+
+  if (options.page) {
+    const page = Math.max(1, parseInt(options.page, 10) || 1);
+    const skip = (page - 1) * limit;
+
+    const [events, total] = await Promise.all([
+      ExecutionEvent.find(query)
+        .sort({ sequenceNumber: 1 })
+        .skip(skip)
+        .limit(limit)
+        .lean(),
+      ExecutionEvent.countDocuments(query)
+    ]);
+
+    return {
+      events,
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit)
+    };
+  }
+
+  // Default array return for direct telemetry/polling
+  const events = await ExecutionEvent.find(query)
+    .sort({ sequenceNumber: 1 })
+    .limit(limit)
+    .lean();
+
+  return events;
 }
 
 module.exports = {

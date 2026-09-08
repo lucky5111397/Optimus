@@ -53,7 +53,10 @@ async function executeTask(taskId, userId) {
 
   const task = await Task.findOne({ _id: taskId, userId });
   if (!task) throw new Error('Task not found');
-  if (task.status !== 'AWAITING_APPROVAL') throw new Error(`Task is not approved for execution (Status: ${task.status})`);
+  const eligibleStatuses = ['AWAITING_APPROVAL', 'FAILED', 'CANCELLED'];
+  if (!eligibleStatuses.includes(task.status)) {
+    throw new Error(`Task is not eligible for execution (Status: ${task.status})`);
+  }
 
   const plan = await TaskPlan.findOne({ taskId: task._id });
   if (!plan) throw new Error('Task plan not found');
@@ -72,7 +75,7 @@ async function executeTask(taskId, userId) {
   }
 
   let execution = await Execution.findOne({ taskId: task._id });
-  const traceId = (execution && execution.traceId) || generateTraceId();
+  const traceId = generateTraceId();
 
   if (!execution) {
     execution = new Execution({
@@ -92,9 +95,18 @@ async function executeTask(taskId, userId) {
     execution.error = '';
     execution.executionLogs = [];
     execution.startedAt = new Date();
+    execution.completedAt = null;
     execution.traceId = traceId;
+    execution.failureDetails = null;
+    if (execution.metadata) {
+      execution.metadata.failureCategory = null;
+      execution.metadata.durationMs = null;
+    }
+    execution.validationResults = null;
     await execution.save();
   }
+
+  resetSequenceCounter(execution._id);
 
   task.status = 'IMPLEMENTING';
   await task.save();
@@ -145,12 +157,12 @@ async function executeTask(taskId, userId) {
       if (Date.now() - executionStartTime > MAX_EXECUTION_TIME_MS) {
         throw new Error('Execution budget exceeded wall-clock limit of 5 minutes');
       }
-      
+
       const step = plan.steps[i];
       execution.currentStep = i + 1;
       await execution.save();
       heartbeatLock(taskId);
-      
+
       await logSystem(execution._id, `Starting Step ${i + 1}: ${step.title}`);
 
       // Record STEP_STARTED audit event
@@ -196,7 +208,7 @@ async function executeTask(taskId, userId) {
 
         // Prune and bound message history to prevent context overflow
         messages = pruneMessageHistory(messages);
-        
+
         // Record AI_TURN_STARTED audit event
         try {
           await recordEvent({
@@ -254,7 +266,7 @@ async function executeTask(taskId, userId) {
             }
           });
         } catch (_) {}
-        
+
         // Add Assistant message to history
         messages.push(responseMessage);
 
@@ -285,7 +297,7 @@ async function executeTask(taskId, userId) {
               lastToolKey = currentToolKey;
               repeatedToolCount = 1;
             }
-            
+
             await logSystem(execution._id, `Executing Tool: ${funcName}(${JSON.stringify(args)})`, 'system');
 
             if (funcName === 'complete_step') {
@@ -346,7 +358,7 @@ async function executeTask(taskId, userId) {
                 }
               });
             } catch (_) {}
-            
+
             // Track files changed
             if (funcName === 'apply_patch' || funcName === 'create_file') {
               const resultText = typeof resultStr === 'string' ? resultStr : (resultStr?.output || String(resultStr));
@@ -370,7 +382,7 @@ async function executeTask(taskId, userId) {
           });
         }
       }
-      
+
       if (!stepComplete) {
         throw new Error(`Step ${i + 1} timed out after ${MAX_TURNS_PER_STEP} agent turns.`);
       }
@@ -385,7 +397,7 @@ async function executeTask(taskId, userId) {
     heartbeatLock(taskId);
 
     await logSystem(execution._id, `Starting validation phase...`);
-    
+
     // Check if package.json exists to determine validation scripts
     const pkgPath = path.join(workspacePath, 'package.json');
     let pkg = null;
@@ -449,7 +461,7 @@ async function executeTask(taskId, userId) {
             if (abortController.signal.aborted) throw new Error('Execution cancelled');
 
             await logSystem(execution._id, `Running validation command: ${cmd} (Attempt ${validationAttempts})...`);
-            
+
             // Record VALIDATION_STARTED audit event
             try {
               await recordEvent({
@@ -727,7 +739,7 @@ async function executeTask(taskId, userId) {
     execution.status = isCancelled ? 'CANCELLED' : 'FAILED';
     execution.error = error.message;
     execution.completedAt = new Date();
-    
+
     const failureDiagnostics = formatFailureDiagnostics(error, { traceId });
     execution.failureDetails = failureDiagnostics;
 
@@ -765,13 +777,13 @@ async function executeTask(taskId, userId) {
 
     task.status = execution.status;
     await task.save();
-    
+
     await logSystem(execution._id, `Execution Terminated [${failureCategory}]: ${error.message}`, 'stderr');
-    
+
     // Rollback changes using git: reset tracked files and clean untracked files
     try {
       await logSystem(execution._id, `Attempting rollback via git...`);
-      
+
       // Record ROLLBACK_STARTED audit event
       try {
         await recordEvent({
@@ -852,7 +864,7 @@ async function executeTask(taskId, userId) {
 async function cancelExecution(taskId, userId) {
   const task = await Task.findOne({ _id: taskId, userId });
   if (!task) throw new Error('Task not found');
-  
+
   const abortController = activeExecutions.get(taskId.toString());
   if (abortController) {
     abortController.abort();

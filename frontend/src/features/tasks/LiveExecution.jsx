@@ -1,56 +1,117 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { XCircle, CheckCircle2, Clock, Terminal, AlertTriangle, Copy, Check, Activity, ChevronDown, ChevronRight, ShieldAlert } from 'lucide-react';
+import {
+  XCircle, CheckCircle2, Clock, Terminal, AlertTriangle,
+  Copy, Check, Activity, ChevronDown, ChevronRight,
+  ShieldAlert, Wrench, ShieldCheck, ArrowDown, Loader2
+} from 'lucide-react';
 import { StatusBadge } from '../../components/ui';
 
-export default function LiveExecution({ taskId, onComplete, onFailed }) {
+export default function LiveExecution({ taskId, onComplete, onFailed, readOnly = false }) {
   const [execution, setExecution] = useState(null);
   const [activeTab, setActiveTab] = useState('terminal'); // 'terminal' | 'audit'
   const [auditEvents, setAuditEvents] = useState([]);
   const [copiedTrace, setCopiedTrace] = useState(false);
+  const [copiedLogs, setCopiedLogs] = useState(false);
   const [expandedEvents, setExpandedEvents] = useState({});
-  const terminalRef = useRef(null);
+  const [autoScrollEnabled, setAutoScrollEnabled] = useState(true);
 
-  const fetchAuditEvents = () => {
-    fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3000/api'}/tasks/${taskId}/execution/events`, {
-      credentials: 'include'
-    })
-      .then(res => res.json())
-      .then(events => {
-        if (Array.isArray(events)) {
-          setAuditEvents(events);
+  const terminalRef = useRef(null);
+  const lastSequenceRef = useRef(0);
+  const currentTraceRef = useRef(null);
+
+  // Incremental event retrieval using sequence cursors
+  const fetchAuditEvents = async () => {
+    try {
+      const sinceSeq = lastSequenceRef.current;
+      const res = await fetch(
+        `${import.meta.env.VITE_API_URL || 'http://localhost:3000/api'}/tasks/${taskId}/execution/events?sinceSequence=${sinceSeq}`,
+        { credentials: 'include' }
+      );
+      if (!res.ok) return;
+      const newEvents = await res.json();
+
+      if (Array.isArray(newEvents) && newEvents.length > 0) {
+        setAuditEvents(prev => {
+          const existingIds = new Set(prev.map(e => e._id || `${e.sequenceNumber}-${e.timestamp}`));
+          const uniqueIncoming = newEvents.filter(e => !existingIds.has(e._id || `${e.sequenceNumber}-${e.timestamp}`));
+          if (uniqueIncoming.length === 0) return prev;
+          const merged = [...prev, ...uniqueIncoming].sort((a, b) => (a.sequenceNumber || 0) - (b.sequenceNumber || 0));
+          return merged;
+        });
+
+        // Update cursor to highest sequence received
+        const maxSeq = Math.max(...newEvents.map(e => e.sequenceNumber || 0));
+        if (maxSeq > lastSequenceRef.current) {
+          lastSequenceRef.current = maxSeq;
         }
-      })
-      .catch(err => console.error('Error fetching audit events:', err));
+      }
+    } catch (err) {
+      console.error('Error fetching incremental audit events:', err);
+    }
   };
 
+  // Execution polling interval
   useEffect(() => {
-    let interval = setInterval(() => {
+    // Reset sequence cursor if taskId changes
+    lastSequenceRef.current = 0;
+    setAuditEvents([]);
+
+    const pollExecution = () => {
       fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3000/api'}/tasks/${taskId}/execution`, {
         credentials: 'include'
       })
         .then(res => res.json())
         .then(data => {
+          // If trace changed, this is a fresh run (e.g. after retry)
+          if (data.traceId && currentTraceRef.current && currentTraceRef.current !== data.traceId) {
+            lastSequenceRef.current = 0;
+            setAuditEvents([]);
+          }
+          currentTraceRef.current = data.traceId;
           setExecution(data);
+
+          // Fetch incremental audit events
           fetchAuditEvents();
-          if (['COMPLETED', 'VERIFIED'].includes(data.status)) {
-            clearInterval(interval);
-            if (onComplete) setTimeout(onComplete, 1000);
-          } else if (['FAILED', 'CANCELLED'].includes(data.status)) {
-            clearInterval(interval);
-            if (onFailed) setTimeout(onFailed, 1000);
+
+          if (!readOnly) {
+            if (['COMPLETED', 'VERIFIED'].includes(data.status)) {
+              clearInterval(interval);
+              if (onComplete) setTimeout(onComplete, 1200);
+            } else if (['FAILED', 'CANCELLED'].includes(data.status)) {
+              clearInterval(interval);
+              if (onFailed) setTimeout(onFailed, 1200);
+            }
           }
         })
-        .catch(err => console.error(err));
-    }, 2000);
+        .catch(err => console.error('Execution poll error:', err));
+    };
+
+    pollExecution();
+    const interval = setInterval(pollExecution, 2000);
 
     return () => clearInterval(interval);
-  }, [taskId, onComplete, onFailed]);
+  }, [taskId, onComplete, onFailed, readOnly]);
 
+  // Terminal scroll handling
   useEffect(() => {
-    if (activeTab === 'terminal' && terminalRef.current) {
+    if (activeTab === 'terminal' && terminalRef.current && autoScrollEnabled) {
       terminalRef.current.scrollTop = terminalRef.current.scrollHeight;
     }
-  }, [execution?.executionLogs, activeTab]);
+  }, [execution?.executionLogs, activeTab, autoScrollEnabled]);
+
+  const handleTerminalScroll = (e) => {
+    const { scrollTop, scrollHeight, clientHeight } = e.currentTarget;
+    // Auto-scroll pauses when scrolled more than 40px away from bottom
+    const isAtBottom = scrollHeight - scrollTop - clientHeight < 40;
+    setAutoScrollEnabled(isAtBottom);
+  };
+
+  const resumeAutoScroll = () => {
+    setAutoScrollEnabled(true);
+    if (terminalRef.current) {
+      terminalRef.current.scrollTop = terminalRef.current.scrollHeight;
+    }
+  };
 
   const handleCancel = async () => {
     try {
@@ -70,6 +131,16 @@ export default function LiveExecution({ taskId, onComplete, onFailed }) {
     setTimeout(() => setCopiedTrace(false), 2000);
   };
 
+  const handleCopyLogs = () => {
+    if (!execution?.executionLogs || execution.executionLogs.length === 0) return;
+    const formatted = execution.executionLogs
+      .map(log => `[${new Date(log.timestamp || Date.now()).toLocaleTimeString()}][${log.stream || 'system'}] ${log.text}`)
+      .join('\n');
+    navigator.clipboard.writeText(formatted);
+    setCopiedLogs(true);
+    setTimeout(() => setCopiedLogs(false), 2000);
+  };
+
   const toggleEventExpand = (id) => {
     setExpandedEvents(prev => ({ ...prev, [id]: !prev[id] }));
   };
@@ -77,25 +148,80 @@ export default function LiveExecution({ taskId, onComplete, onFailed }) {
   const totalSteps = execution?.totalSteps || 1;
   const currentStepIndex = execution?.currentStep || 0;
   const activeStatus = execution?.taskStatus || execution?.status || 'RUNNING';
+  const isCompleted = ['COMPLETED', 'VERIFIED'].includes(activeStatus) || ['COMPLETED', 'VERIFIED'].includes(execution?.status);
+
+  // Derive Active Tool Execution Indicator from actual audit events
+  const deriveActiveTool = () => {
+    if (isCompleted || activeStatus === 'FAILED' || activeStatus === 'CANCELLED') return null;
+
+    for (let i = auditEvents.length - 1; i >= 0; i--) {
+      const ev = auditEvents[i];
+      if (ev.eventType === 'TOOL_CALL_STARTED') {
+        const targetPath = ev.metadata?.args?.path || ev.metadata?.args?.command || ev.metadata?.args?.query || '';
+        return {
+          name: ev.toolName || 'tool',
+          target: targetPath,
+          status: 'running',
+          step: ev.stepIndex || currentStepIndex
+        };
+      }
+      if (ev.eventType === 'TOOL_CALL_COMPLETED') {
+        const targetPath = ev.metadata?.args?.path || ev.metadata?.outputSummary || '';
+        return {
+          name: ev.toolName || 'tool',
+          target: targetPath,
+          status: ev.status === 'FAILED' ? 'failed' : 'completed',
+          durationMs: ev.durationMs || 0,
+          step: ev.stepIndex || currentStepIndex
+        };
+      }
+    }
+    return null;
+  };
+
+  const activeTool = deriveActiveTool();
+
+  // Derive Live Validation State
+  const isValidationPhase = ['TESTING', 'VALIDATING', 'DIAGNOSING', 'RETRYING', 'VERIFYING'].includes(activeStatus);
+  const deriveValidationInfo = () => {
+    if (!isValidationPhase) return null;
+
+    let attempt = 1;
+    let command = 'npm test';
+
+    for (let i = auditEvents.length - 1; i >= 0; i--) {
+      const ev = auditEvents[i];
+      if (ev.eventType === 'VALIDATION_STARTED' || ev.eventType === 'VALIDATION_COMPLETED') {
+        if (ev.metadata?.attempt) attempt = ev.metadata.attempt;
+        if (ev.metadata?.command) command = ev.metadata.command;
+        break;
+      }
+    }
+
+    let phaseLabel = 'Running validation checks...';
+    if (activeStatus === 'DIAGNOSING') {
+      phaseLabel = 'Diagnosing test failure...';
+    } else if (activeStatus === 'RETRYING') {
+      phaseLabel = 'Applying self-correction patch...';
+    } else if (activeStatus === 'VERIFYING') {
+      phaseLabel = 'Re-verifying fixes...';
+    }
+
+    return { attempt, command, phaseLabel };
+  };
+
+  const validationInfo = deriveValidationInfo();
 
   let currentAction = 'Executing plan...';
-  if (activeStatus === 'VALIDATING' || activeStatus === 'TESTING') {
-    currentAction = 'Running verification suite...';
-  } else if (activeStatus === 'DIAGNOSING') {
-    currentAction = 'Diagnosing validation failure...';
-  } else if (activeStatus === 'RETRYING') {
-    const attempt = execution?.validationResults?.attempts || 1;
-    currentAction = `Self-correcting code (Attempt ${attempt + 1} of 3)...`;
-  } else if (activeStatus === 'VERIFYING') {
-    const attempt = execution?.validationResults?.attempts || 1;
-    currentAction = `Re-verifying fixes (Attempt ${attempt})...`;
+  if (isValidationPhase && validationInfo) {
+    currentAction = validationInfo.phaseLabel;
   } else if (['COMPLETED', 'VERIFIED'].includes(activeStatus)) {
     currentAction = 'Verification passed!';
   } else if (activeStatus === 'FAILED') {
     currentAction = 'Execution failed.';
+  } else if (activeStatus === 'CANCELLED') {
+    currentAction = 'Execution cancelled.';
   }
-
-  const isCompleted = ['COMPLETED', 'VERIFIED'].includes(execution?.status) || ['COMPLETED', 'VERIFIED'].includes(execution?.taskStatus);
 
   const getEventBadgeClass = (eventType, status) => {
     if (status === 'FAILED' || eventType.includes('FAILED')) return 'bg-red-500/10 text-red-400 border-red-500/30';
@@ -108,7 +234,7 @@ export default function LiveExecution({ taskId, onComplete, onFailed }) {
 
   return (
     <div className="h-full flex flex-col p-6 space-y-4 max-w-5xl mx-auto">
-      {/* Header and Progress */}
+      {/* Header and Progress Card */}
       <div className="bg-background border border-border rounded-md p-4 flex flex-col gap-4 shadow-modal">
         <div className="flex items-center justify-between flex-wrap gap-2">
           <div className="flex items-center gap-3">
@@ -157,8 +283,8 @@ export default function LiveExecution({ taskId, onComplete, onFailed }) {
               </div>
             )}
 
-            {!isCompleted && activeStatus !== 'FAILED' && (
-              <button 
+            {!readOnly && !isCompleted && activeStatus !== 'FAILED' && activeStatus !== 'CANCELLED' && (
+              <button
                 onClick={handleCancel}
                 title="Cancel Execution"
                 className="p-1.5 text-text-secondary hover:text-red-400 rounded-sm transition-colors border border-border hover:border-red-500/30"
@@ -168,31 +294,99 @@ export default function LiveExecution({ taskId, onComplete, onFailed }) {
             )}
           </div>
         </div>
-        
+
+        {/* Progress Bar */}
         <div className="space-y-1.5">
           <div className="flex justify-between text-xs text-text-secondary font-mono">
-            {['TESTING', 'VALIDATING', 'DIAGNOSING', 'RETRYING', 'VERIFYING'].includes(activeStatus) ? (
-              <span>Verification Phase</span>
+            {isValidationPhase ? (
+              <span>Verification & Validation Phase</span>
+            ) : isCompleted ? (
+              <span>All Steps Completed</span>
             ) : (
               <span>Step {currentStepIndex} of {totalSteps}</span>
             )}
             <span>
-              {['TESTING', 'VALIDATING', 'DIAGNOSING', 'RETRYING', 'VERIFYING'].includes(activeStatus)
+              {isValidationPhase
                 ? 'Validating'
+                : isCompleted
+                ? '100%'
                 : `${Math.round((currentStepIndex / Math.max(1, totalSteps)) * 100)}%`}
             </span>
           </div>
           <div className="h-1.5 w-full bg-surface rounded-full overflow-hidden">
-            <div 
+            <div
               className="h-full bg-primary transition-all duration-500 ease-out rounded-full"
-              style={{ 
-                width: ['TESTING', 'VALIDATING', 'DIAGNOSING', 'RETRYING', 'VERIFYING', 'COMPLETED', 'VERIFIED'].includes(activeStatus)
+              style={{
+                width: isValidationPhase || isCompleted
                   ? '100%'
-                  : `${(currentStepIndex / Math.max(1, totalSteps)) * 100}%` 
+                  : `${(currentStepIndex / Math.max(1, totalSteps)) * 100}%`
               }}
             />
           </div>
         </div>
+
+        {/* Active Tool Execution Indicator */}
+        {activeTool && !isValidationPhase && (
+          <div className="flex items-center justify-between p-2.5 bg-surface border border-border rounded-sm text-xs font-mono">
+            <div className="flex items-center gap-2 truncate">
+              <div className="p-1 bg-primary/10 rounded">
+                <Wrench className="w-3.5 h-3.5 text-primary" />
+              </div>
+              <span className="text-text-secondary">Tool:</span>
+              <span className="text-primary font-medium">{activeTool.name}</span>
+              {activeTool.target && (
+                <span className="text-text-secondary truncate max-w-sm text-[11px]">
+                  ({activeTool.target})
+                </span>
+              )}
+            </div>
+            <div className="flex items-center gap-2 flex-none">
+              {activeTool.status === 'running' ? (
+                <span className="flex items-center gap-1 text-[11px] text-primary px-2 py-0.5 bg-primary/10 border border-primary/30 rounded">
+                  <Loader2 className="w-3 h-3 animate-spin" />
+                  RUNNING
+                </span>
+              ) : activeTool.status === 'completed' ? (
+                <span className="flex items-center gap-1 text-[11px] text-green-400 px-2 py-0.5 bg-green-500/10 border border-green-500/30 rounded">
+                  <Check className="w-3 h-3" />
+                  COMPLETED {activeTool.durationMs > 0 ? `(${activeTool.durationMs}ms)` : ''}
+                </span>
+              ) : (
+                <span className="flex items-center gap-1 text-[11px] text-red-400 px-2 py-0.5 bg-red-500/10 border border-red-500/30 rounded">
+                  <XCircle className="w-3 h-3" />
+                  FAILED
+                </span>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Live Validation Progress Card */}
+        {isValidationPhase && validationInfo && (
+          <div className="p-3 bg-primary/5 border border-primary/25 rounded-sm text-xs space-y-2">
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <div className="flex items-center gap-2">
+                <ShieldCheck className="w-4 h-4 text-primary" />
+                <span className="font-heading font-medium text-text-primary">
+                  Automated Sandbox Verification
+                </span>
+                <span className="px-2 py-0.5 bg-primary/20 text-primary border border-primary/30 rounded text-[11px] font-mono">
+                  Attempt {validationInfo.attempt} of 3
+                </span>
+              </div>
+              <div className="flex items-center gap-1.5 font-mono text-[11px]">
+                <span className="text-text-secondary">Running:</span>
+                <span className="px-2 py-0.5 bg-background border border-border rounded text-text-primary font-bold">
+                  {validationInfo.command}
+                </span>
+              </div>
+            </div>
+            <div className="text-[12px] text-text-secondary flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-primary animate-pulse" />
+              <span>{validationInfo.phaseLabel}</span>
+            </div>
+          </div>
+        )}
 
         {/* AI Configuration Error Alert */}
         {(execution?.error?.includes('OPENROUTER_API_KEY') || execution?.executionLogs?.some(l => l.text?.includes('OPENROUTER_API_KEY'))) && (
@@ -275,35 +469,70 @@ export default function LiveExecution({ taskId, onComplete, onFailed }) {
             </button>
           </div>
 
-          <div className="w-16" /> {/* Spacer for symmetry */}
+          {/* Terminal Copy Controls */}
+          <div className="flex items-center gap-2">
+            {activeTab === 'terminal' && (
+              <button
+                onClick={handleCopyLogs}
+                title="Copy terminal logs"
+                className="flex items-center gap-1 text-[11px] font-mono text-text-secondary hover:text-text-primary px-2 py-1 bg-background border border-border rounded-sm transition-colors"
+              >
+                {copiedLogs ? (
+                  <>
+                    <Check className="w-3 h-3 text-green-400" />
+                    <span className="text-green-400">Copied</span>
+                  </>
+                ) : (
+                  <>
+                    <Copy className="w-3 h-3" />
+                    <span>Copy Logs</span>
+                  </>
+                )}
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Tab 1: Terminal Content */}
         {activeTab === 'terminal' && (
-          <div 
-            ref={terminalRef}
-            className="flex-1 p-4 overflow-y-auto font-mono text-[13px] leading-relaxed bg-[#0A0C10]"
-          >
-            {(execution?.executionLogs || []).map((log, i) => (
-              <div key={i} className="flex gap-4 hover:bg-white/5 px-2 py-0.5 -mx-2 rounded">
-                <span className="text-text-secondary opacity-50 flex-none w-20">
-                  {new Date(log.timestamp || Date.now()).toLocaleTimeString([], { hour12: false, hour: '2-digit', minute: '2-digit', second:'2-digit' })}
-                </span>
-                <span className={`
-                  flex-1 whitespace-pre-wrap break-words
-                  ${log.stream === 'stderr' ? 'text-red-400' : ''}
-                  ${log.stream === 'system' ? 'text-primary' : ''}
-                  ${log.stream === 'stdout' || !log.stream ? 'text-text-primary' : ''}
-                `}>
-                  {log.text}
-                </span>
-              </div>
-            ))}
-            {!isCompleted && (
-              <div className="flex gap-4 px-2 py-0.5 -mx-2 mt-2">
-                <span className="text-text-secondary opacity-50 flex-none w-20">...</span>
-                <span className="w-2 h-4 bg-primary animate-pulse inline-block" />
-              </div>
+          <div className="relative flex-1 flex flex-col overflow-hidden">
+            <div
+              ref={terminalRef}
+              onScroll={handleTerminalScroll}
+              className="flex-1 p-4 overflow-y-auto font-mono text-[13px] leading-relaxed bg-[#0A0C10]"
+            >
+              {(execution?.executionLogs || []).map((log, i) => (
+                <div key={i} className="flex gap-4 hover:bg-white/5 px-2 py-0.5 -mx-2 rounded">
+                  <span className="text-text-secondary opacity-50 flex-none w-20">
+                    {new Date(log.timestamp || Date.now()).toLocaleTimeString([], { hour12: false, hour: '2-digit', minute: '2-digit', second:'2-digit' })}
+                  </span>
+                  <span className={`
+                    flex-1 whitespace-pre-wrap break-words
+                    ${log.stream === 'stderr' ? 'text-red-400' : ''}
+                    ${log.stream === 'system' ? 'text-primary' : ''}
+                    ${log.stream === 'stdout' || !log.stream ? 'text-text-primary' : ''}
+                  `}>
+                    {log.text}
+                  </span>
+                </div>
+              ))}
+              {!isCompleted && activeStatus !== 'FAILED' && activeStatus !== 'CANCELLED' && (
+                <div className="flex gap-4 px-2 py-0.5 -mx-2 mt-2">
+                  <span className="text-text-secondary opacity-50 flex-none w-20">...</span>
+                  <span className="w-2 h-4 bg-primary animate-pulse inline-block" />
+                </div>
+              )}
+            </div>
+
+            {/* Resume Auto-Scroll Button */}
+            {!autoScrollEnabled && (
+              <button
+                onClick={resumeAutoScroll}
+                className="absolute bottom-4 right-6 bg-surface/95 border border-primary/40 text-primary text-xs font-mono px-3 py-1.5 rounded-full shadow-lg hover:bg-primary hover:text-white transition-all flex items-center gap-1.5"
+              >
+                <ArrowDown className="w-3.5 h-3.5" />
+                <span>Resume Auto-Scroll</span>
+              </button>
             )}
           </div>
         )}
@@ -322,7 +551,7 @@ export default function LiveExecution({ taskId, onComplete, onFailed }) {
                 const hasMetadata = event.metadata && Object.keys(event.metadata).length > 0;
 
                 return (
-                  <div 
+                  <div
                     key={eventId}
                     className="p-3 bg-surface/50 border border-border/80 hover:border-border rounded-sm text-xs space-y-1.5 transition-colors"
                   >

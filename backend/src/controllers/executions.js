@@ -16,8 +16,10 @@ exports.startExecution = async (req, res) => {
     const repo = await Repository.findOne({ _id: task.repositoryId, userId: req.userId });
     if (!repo) return res.status(403).json({ error: 'Repository access denied' });
 
-    if (task.status !== 'AWAITING_APPROVAL') {
-      return res.status(400).json({ error: 'Task must be in AWAITING_APPROVAL state to execute' });
+    // Allow starting execution if task is awaiting approval or retrying from failed/cancelled state
+    const eligibleStatuses = ['AWAITING_APPROVAL', 'FAILED', 'CANCELLED'];
+    if (!eligibleStatuses.includes(task.status)) {
+      return res.status(400).json({ error: 'Task must be in AWAITING_APPROVAL, FAILED, or CANCELLED state to execute' });
     }
 
     // Verify approved plan exists and planHash matches
@@ -90,8 +92,11 @@ exports.getExecutionEvents = async (req, res) => {
     const execution = await Execution.findOne({ taskId: task._id }).sort({ createdAt: -1 });
     if (!execution) return res.json([]);
 
-    const sinceSequence = req.query.sinceSequence ? parseInt(req.query.sinceSequence, 10) : 0;
-    const events = await fetchExecutionEvents(execution._id, { sinceSequence });
+    const sinceSequence = (req.query.sinceSequence !== undefined && req.query.sinceSequence !== null && req.query.sinceSequence !== '')
+      ? parseInt(req.query.sinceSequence, 10)
+      : undefined;
+    const result = await fetchExecutionEvents(execution._id, { sinceSequence });
+    const events = Array.isArray(result) ? result : (result.events || []);
     res.json(events);
   } catch (error) {
     res.status(500).json({ error: error.message || 'Server error' });
@@ -107,7 +112,8 @@ exports.getExecutionAudit = async (req, res) => {
     const execution = await Execution.findOne({ taskId: task._id }).sort({ createdAt: -1 });
     if (!execution) return res.status(404).json({ error: 'Execution not found' });
 
-    const events = await fetchExecutionEvents(execution._id);
+    const result = await fetchExecutionEvents(execution._id);
+    const events = Array.isArray(result) ? result : (result.events || []);
 
     res.json({
       traceId: execution.traceId,
@@ -118,7 +124,7 @@ exports.getExecutionAudit = async (req, res) => {
       startedAt: execution.startedAt,
       completedAt: execution.completedAt,
       durationMs: execution.metadata?.durationMs || null,
-      failureCategory: execution.metadata?.failureCategory || null,
+      failureCategory: execution.metadata?.failureCategory || execution.failureDetails?.category || null,
       failureDetails: execution.failureDetails || null,
       totalEvents: events.length,
       events
