@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { ArrowLeft, FileText, CheckCircle2, Clock, GitMerge, Box, Loader2, AlertCircle } from 'lucide-react';
+import { ArrowLeft, FileText, CheckCircle2, Clock, GitMerge, Box, Loader2, AlertCircle, GitPullRequest, ExternalLink } from 'lucide-react';
 import { SectionHeader } from '../components/ui';
 
 export default function EngineeringReport() {
@@ -131,6 +131,49 @@ export default function EngineeringReport() {
               </div>
             </div>
           </div>
+
+          {(task.prUrl || task.status === 'DELIVERED') && (
+            <div className="bg-surface border border-primary/30 rounded-md p-6 shadow-modal">
+              <h2 className="text-sm font-medium text-text-secondary uppercase tracking-wider mb-4 flex items-center gap-2">
+                <GitPullRequest className="w-4 h-4 text-primary" /> GitHub Delivery
+              </h2>
+              <div className="space-y-3 text-sm">
+                {task.prNumber && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-text-secondary">Pull Request</span>
+                    <span className="font-mono text-primary font-medium">#{task.prNumber}</span>
+                  </div>
+                )}
+                {task.deliveryBranch && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-text-secondary">Branch</span>
+                    <span className="font-mono text-text-primary text-xs truncate max-w-[140px]" title={task.deliveryBranch}>
+                      {task.deliveryBranch}
+                    </span>
+                  </div>
+                )}
+                {task.deliveredAt && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-text-secondary">Delivered At</span>
+                    <span className="text-text-primary text-xs">{new Date(task.deliveredAt).toLocaleDateString()}</span>
+                  </div>
+                )}
+                {task.prUrl && (
+                  <div className="pt-2">
+                    <a
+                      href={task.prUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center justify-center gap-2 w-full py-2 px-3 bg-primary hover:bg-opacity-90 text-white rounded-sm text-xs font-medium transition-colors"
+                    >
+                      <ExternalLink className="w-3.5 h-3.5" />
+                      View Pull Request
+                    </a>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
 
           <div className="bg-surface border border-border rounded-md overflow-hidden shadow-modal">
             <div className="p-4 border-b border-border bg-modal">

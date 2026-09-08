@@ -52,7 +52,14 @@ const executionEventSchema = new mongoose.Schema({
       'EXECUTION_LOCK_ACQUIRED',
       'EXECUTION_LOCK_RELEASED',
       'IDEMPOTENCY_REUSED',
-      'ROLLBACK_FAILED'
+      'ROLLBACK_FAILED',
+      'DELIVERY_STARTED',
+      'DELIVERY_BRANCH_PREPARED',
+      'DELIVERY_COMMITTED',
+      'DELIVERY_PUSHED',
+      'DELIVERY_PR_CREATED',
+      'DELIVERY_COMPLETED',
+      'DELIVERY_FAILED'
     ]
   },
   sequenceNumber: {

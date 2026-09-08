@@ -242,7 +242,12 @@ exports.getReport = async (req, res) => {
         status: task.status,
         priority: task.priority,
         createdAt: task.createdAt,
-        updatedAt: task.updatedAt
+        updatedAt: task.updatedAt,
+        prUrl: task.prUrl || null,
+        prNumber: task.prNumber || null,
+        deliveryBranch: task.deliveryBranch || null,
+        deliveredAt: task.deliveredAt || null,
+        deliveryStatus: task.deliveryStatus || null
       },
       repository: task.repositoryId ? {
         owner: task.repositoryId.owner,

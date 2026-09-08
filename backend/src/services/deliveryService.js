@@ -10,6 +10,7 @@ const RepositoryBranch = require('../models/RepositoryBranch');
 const User = require('../models/User');
 const { isSensitivePath } = require('../ai/prompts');
 const { scrubTokens } = require('../agent/toolExecutors');
+const { recordEvent, generateTraceId } = require('./auditService');
 
 const WORKSPACES_DIR = path.resolve(__dirname, '..', '..', 'workspaces');
 
@@ -128,8 +129,21 @@ async function callGithubApiWithRetry(apiFn, maxRetries = 2) {
   throw lastError;
 }
 
+const DELIVERY_EVENT_TYPE_MAP = {
+  delivery_started: 'DELIVERY_STARTED',
+  branch_prepared: 'DELIVERY_BRANCH_PREPARED',
+  commit_created: 'DELIVERY_COMMITTED',
+  push_started: 'DELIVERY_PUSHED',
+  push_completed: 'DELIVERY_PUSHED',
+  pr_creation_started: 'DELIVERY_PR_CREATED',
+  pr_created: 'DELIVERY_PR_CREATED',
+  delivery_completed: 'DELIVERY_COMPLETED',
+  delivery_failed: 'DELIVERY_FAILED'
+};
+
 /**
- * Emits a sanitized delivery lifecycle event and persists it to execution and task.
+ * Emits a sanitized delivery lifecycle event and persists it to execution and task,
+ * as well as recording it to the formal immutable ExecutionEvent audit log.
  */
 async function emitDeliveryEvent(execution, task, eventName, details = {}) {
   const cleanDetails = {};
@@ -162,6 +176,30 @@ async function emitDeliveryEvent(execution, task, eventName, details = {}) {
     await task.save().catch(() => {});
   }
   await execution.save().catch(() => {});
+
+  // Persist to formal immutable ExecutionEvent audit log
+  const auditEventType = DELIVERY_EVENT_TYPE_MAP[eventName];
+  if (auditEventType && execution && execution._id && task && task._id) {
+    try {
+      if (!execution.traceId) {
+        execution.traceId = generateTraceId();
+        await execution.save().catch(() => {});
+      }
+      const eventStatus = eventName === 'delivery_failed' ? 'FAILED' :
+        (eventName.endsWith('_started') ? 'IN_PROGRESS' : 'SUCCESS');
+
+      await recordEvent({
+        executionId: execution._id,
+        taskId: task._id,
+        userId: task.userId || execution.userId,
+        traceId: execution.traceId,
+        eventType: auditEventType,
+        status: eventStatus,
+        summary: scrubTokens(logText).substring(0, 500),
+        metadata: cleanDetails
+      });
+    } catch (_) {}
+  }
 }
 
 /**
