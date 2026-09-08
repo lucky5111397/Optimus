@@ -132,7 +132,7 @@ export default function EngineeringReport() {
             </div>
           </div>
 
-          {(task.prUrl || task.status === 'DELIVERED') && (
+          {(task.prUrl || task.status === 'DELIVERED' || task.status === 'MERGED' || task.status === 'CLOSED') && (
             <div className="bg-surface border border-primary/30 rounded-md p-6 shadow-modal">
               <h2 className="text-sm font-medium text-text-secondary uppercase tracking-wider mb-4 flex items-center gap-2">
                 <GitPullRequest className="w-4 h-4 text-primary" /> GitHub Delivery
@@ -142,6 +142,30 @@ export default function EngineeringReport() {
                   <div className="flex items-center justify-between">
                     <span className="text-text-secondary">Pull Request</span>
                     <span className="font-mono text-primary font-medium">#{task.prNumber}</span>
+                  </div>
+                )}
+                {task.prState && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-text-secondary">PR State</span>
+                    <span className={`text-[11px] font-mono uppercase px-2 py-0.5 rounded border ${
+                      task.prState === 'merged' ? 'bg-purple-500/10 text-purple-400 border-purple-500/30' :
+                      task.prState === 'closed' ? 'bg-gray-500/10 text-gray-400 border-gray-500/30' :
+                      'bg-green-500/10 text-green-400 border-green-500/30'
+                    }`}>
+                      {task.prState}
+                    </span>
+                  </div>
+                )}
+                {task.ciStatus && task.ciStatus !== 'NONE' && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-text-secondary">CI Checks</span>
+                    <span className={`text-[11px] font-mono uppercase px-2 py-0.5 rounded border ${
+                      task.ciStatus === 'SUCCESS' ? 'bg-green-500/10 text-green-400 border-green-500/30' :
+                      task.ciStatus === 'PENDING' ? 'bg-yellow-500/10 text-yellow-400 border-yellow-500/30 animate-pulse' :
+                      'bg-red-500/10 text-red-400 border-red-500/30'
+                    }`}>
+                      {task.ciStatus}
+                    </span>
                   </div>
                 )}
                 {task.deliveryBranch && (
@@ -156,6 +180,12 @@ export default function EngineeringReport() {
                   <div className="flex items-center justify-between">
                     <span className="text-text-secondary">Delivered At</span>
                     <span className="text-text-primary text-xs">{new Date(task.deliveredAt).toLocaleDateString()}</span>
+                  </div>
+                )}
+                {task.prMergedAt && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-text-secondary">Merged At</span>
+                    <span className="text-purple-400 text-xs">{new Date(task.prMergedAt).toLocaleDateString()}</span>
                   </div>
                 )}
                 {task.prUrl && (

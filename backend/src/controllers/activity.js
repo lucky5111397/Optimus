@@ -26,6 +26,25 @@ exports.getActivity = async (req, res) => {
       const repoName = task.repositoryId ? `${task.repositoryId.owner}/${task.repositoryId.name}` : 'Unknown';
       
       if (task.status === 'DELIVERED') {
+      if (task.status === 'MERGED') {
+        activity.push({
+          id: `task-merged-${task._id}`,
+          type: 'task_completed',
+          title: 'PR Merged',
+          description: task.title,
+          timestamp: task.prMergedAt || task.updatedAt,
+          repoName
+        });
+      } else if (task.status === 'CLOSED') {
+        activity.push({
+          id: `task-closed-${task._id}`,
+          type: 'execution_failed',
+          title: 'PR Closed',
+          description: task.title,
+          timestamp: task.prClosedAt || task.updatedAt,
+          repoName
+        });
+      } else if (task.status === 'DELIVERED') {
         activity.push({
           id: `task-delivered-${task._id}`,
           type: 'task_completed',

@@ -315,6 +315,19 @@ exports.deliverTask = async (req, res) => {
   }
 };
 
+// POST /api/tasks/:id/sync
+// On-demand synchronization of PR state and CI check runs from GitHub REST API
+exports.syncTaskPR = async (req, res) => {
+  try {
+    const result = await deliveryService.syncTaskPullRequestStatus(req.params.id, req.userId);
+    res.json(result);
+  } catch (error) {
+    console.error('Sync PR error:', error.message);
+    const status = error.statusCode || 500;
+    res.status(status).json({ error: error.message || 'Failed to sync PR status' });
+  }
+};
+
 // DELETE /api/tasks/:id
 // Deletes a task and cascades to associated TaskContext, TaskPlan, Execution, and ExecutionEvent records
 exports.deleteTask = async (req, res) => {

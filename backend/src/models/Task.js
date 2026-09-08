@@ -24,7 +24,7 @@ const taskSchema = new mongoose.Schema({
       'DRAFT', 'ANALYZING', 'CONTEXT_READY', 'PLANNING', 'PLAN_READY', 
       'AWAITING_APPROVAL', 'IMPLEMENTING', 'TESTING', 
       'DIAGNOSING', 'RETRYING', 'VERIFYING', 'VERIFIED', 
-      'ACCEPTED', 'DELIVERED', 'FAILED', 'CANCELLED'
+      'ACCEPTED', 'DELIVERED', 'MERGED', 'CLOSED', 'FAILED', 'CANCELLED'
     ],
     default: 'DRAFT'
   },
@@ -54,6 +54,28 @@ const taskSchema = new mongoose.Schema({
     default: 'NOT_STARTED'
   },
   deliveryError: {
+    type: String
+  },
+  prState: {
+    type: String,
+    enum: ['open', 'closed', 'merged'],
+    default: 'open'
+  },
+  prMergedAt: {
+    type: Date
+  },
+  prClosedAt: {
+    type: Date
+  },
+  ciStatus: {
+    type: String,
+    enum: ['PENDING', 'SUCCESS', 'FAILURE', 'NEUTRAL', 'NONE'],
+    default: 'NONE'
+  },
+  ciDetails: {
+    type: mongoose.Schema.Types.Mixed
+  },
+  mergeableState: {
     type: String
   }
 }, { timestamps: true });

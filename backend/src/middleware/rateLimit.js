@@ -73,8 +73,16 @@ const taskLimiter = createRateLimiter({
   message: 'Too many task operations. Please wait a moment before trying again.'
 });
 
+// Limiter for inbound GitHub webhooks (allows bursts while protecting against DoS)
+const webhookLimiter = createRateLimiter({
+  windowMs: 60 * 1000,       // 1 minute
+  maxRequests: 300,          // 300 requests per minute
+  message: 'Too many webhook events received. Please throttle.'
+});
+
 module.exports = {
   createRateLimiter,
   authLimiter,
-  taskLimiter
+  taskLimiter,
+  webhookLimiter
 };

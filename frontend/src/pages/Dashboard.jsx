@@ -34,8 +34,8 @@ export default function Dashboard() {
   }, []);
 
   const activeRepos = repositories?.filter(r => r.status === 'READY') || [];
-  const activeTasks = tasks?.filter(t => !['COMPLETED', 'VERIFIED', 'DELIVERED', 'FAILED', 'CANCELLED'].includes(t.status)) || [];
-  const completedTasks = tasks?.filter(t => ['COMPLETED', 'VERIFIED', 'DELIVERED'].includes(t.status)) || [];
+  const activeTasks = tasks?.filter(t => !['COMPLETED', 'VERIFIED', 'DELIVERED', 'MERGED', 'CLOSED', 'FAILED', 'CANCELLED'].includes(t.status)) || [];
+  const completedTasks = tasks?.filter(t => ['COMPLETED', 'VERIFIED', 'DELIVERED', 'MERGED'].includes(t.status)) || [];
   
   const getActivityColor = (type) => {
     switch(type) {

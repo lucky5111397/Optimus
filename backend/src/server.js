@@ -17,6 +17,8 @@ const tasksRoutes = require('./routes/tasks');
 const apiRoutes = require('./routes/api');
 const settingsRoutes = require('./routes/settings');
 const { authLimiter, taskLimiter } = require('./middleware/rateLimit');
+const webhookRoutes = require('./routes/webhooks');
+const { authLimiter, taskLimiter, webhookLimiter } = require('./middleware/rateLimit');
 
 const mongoose = require('mongoose');
 const aiGateway = require('./ai/gateway');
@@ -55,6 +57,7 @@ app.use(cors({
   credentials: true
 }));
 app.use(express.json());
+app.use(express.json({ verify: (req, res, buf) => { req.rawBody = buf; } }));
 app.use(cookieParser());
 
 // Health check (public)
@@ -102,6 +105,7 @@ app.use('/api/auth', authLimiter, authRoutes);
 app.use('/api/repositories', repositoriesRoutes);
 app.use('/api/tasks', taskLimiter, tasksRoutes);
 app.use('/api/settings', settingsRoutes);
+app.use('/api/webhooks', webhookLimiter, webhookRoutes);
 app.use('/api', apiRoutes);
 
 // Error handling middleware (sanitized for production security)

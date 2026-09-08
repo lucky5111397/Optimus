@@ -890,6 +890,178 @@ async function deliverTaskToGithub(taskId, userId) {
   }
 }
 
+/**
+ * Synchronizes the pull request state, merge status, and CI check status
+ * for a delivered task directly from the GitHub REST API on demand.
+ */
+async function syncTaskPullRequestStatus(taskId, userId) {
+  const task = await Task.findOne({ _id: taskId, userId }).populate('repositoryId');
+  if (!task) {
+    const error = new Error('Task not found');
+    error.statusCode = 404;
+    throw error;
+  }
+
+  if (!task.prNumber) {
+    const error = new Error('Task has not been delivered to GitHub or lacks a PR number');
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const repo = await Repository.findOne({ _id: task.repositoryId._id, userId });
+  if (!repo) {
+    const error = new Error('Repository access denied');
+    error.statusCode = 403;
+    throw error;
+  }
+
+  const user = await User.findById(userId);
+  if (!user || !user.accessToken) {
+    const error = new Error('GitHub access token missing');
+    error.statusCode = 403;
+    throw error;
+  }
+
+  const safeOwner = repo.owner.replace(/[^a-zA-Z0-9_-]/g, '');
+  const safeName = repo.name.replace(/[^a-zA-Z0-9_.-]/g, '');
+
+  // 1. Fetch Pull Request details from GitHub
+  let prData = null;
+  try {
+    const response = await callGithubApiWithRetry(() => axios.get(
+      `https://api.github.com/repos/${safeOwner}/${safeName}/pulls/${task.prNumber}`,
+      {
+        headers: {
+          Authorization: `Bearer ${user.accessToken}`,
+          Accept: 'application/vnd.github.v3+json'
+        },
+        timeout: 10000
+      }
+    ));
+    prData = response.data;
+  } catch (err) {
+    throw err;
+  }
+
+  const isMerged = Boolean(prData.merged);
+  const state = prData.state; // 'open' | 'closed'
+  const prState = isMerged ? 'merged' : state;
+  const headSha = prData.head?.sha;
+
+  task.prState = prState;
+  task.mergeableState = prData.mergeable_state || task.mergeableState;
+
+  if (isMerged) {
+    task.status = 'MERGED';
+    task.prMergedAt = new Date(prData.merged_at || Date.now());
+  } else if (state === 'closed') {
+    task.status = 'CLOSED';
+    task.prClosedAt = new Date(prData.closed_at || Date.now());
+  } else if (state === 'open' && task.status === 'CLOSED') {
+    task.status = 'DELIVERED';
+    task.prClosedAt = null;
+  }
+
+  // 2. Fetch Check Runs if head SHA is available
+  let overallCiStatus = task.ciStatus || 'NONE';
+  let checkList = [];
+
+  if (headSha) {
+    try {
+      const checkRunsRes = await axios.get(
+        `https://api.github.com/repos/${safeOwner}/${safeName}/commits/${headSha}/check-runs`,
+        {
+          headers: {
+            Authorization: `Bearer ${user.accessToken}`,
+            Accept: 'application/vnd.github.v3+json'
+          },
+          timeout: 10000
+        }
+      );
+
+      const checkRuns = checkRunsRes.data?.check_runs || [];
+      if (checkRuns.length > 0) {
+        let hasFailure = false;
+        let hasPending = false;
+        let hasSuccess = false;
+
+        checkList = checkRuns.map(cr => {
+          if (cr.conclusion === 'success') hasSuccess = true;
+          else if (['failure', 'timed_out', 'action_required'].includes(cr.conclusion)) hasFailure = true;
+          else if (['queued', 'in_progress'].includes(cr.status)) hasPending = true;
+
+          return {
+            name: cr.name,
+            status: cr.status,
+            conclusion: cr.conclusion || null,
+            htmlUrl: cr.html_url || null,
+            startedAt: cr.started_at || null,
+            completedAt: cr.completed_at || null
+          };
+        });
+
+        if (hasFailure) overallCiStatus = 'FAILURE';
+        else if (hasPending) overallCiStatus = 'PENDING';
+        else if (hasSuccess) overallCiStatus = 'SUCCESS';
+        else overallCiStatus = 'NEUTRAL';
+      }
+    } catch (_) {
+      // Non-fatal: check-runs might not be configured on repo
+    }
+  }
+
+  task.ciStatus = overallCiStatus;
+  task.ciDetails = {
+    overall: overallCiStatus,
+    checkRuns: checkList,
+    lastSyncedAt: new Date()
+  };
+
+  await task.save();
+
+  // 3. Record audit event
+  const execution = await Execution.findOne({ taskId: task._id }).sort({ createdAt: -1 });
+  if (execution) {
+    try {
+      if (!execution.traceId) {
+        execution.traceId = generateTraceId();
+        await execution.save().catch(() => {});
+      }
+      await recordEvent({
+        executionId: execution._id,
+        taskId: task._id,
+        userId,
+        traceId: execution.traceId,
+        eventType: isMerged ? 'PR_MERGED' : (state === 'closed' ? 'PR_CLOSED' : 'PR_SYNCHRONIZED'),
+        status: 'SUCCESS',
+        summary: `Synchronized PR #${task.prNumber}: State is ${prState}, CI is ${overallCiStatus}`,
+        metadata: {
+          prNumber: task.prNumber,
+          prState,
+          isMerged,
+          overallCiStatus,
+          mergeableState: task.mergeableState
+        }
+      });
+    } catch (_) {}
+  }
+
+  return {
+    taskId: task._id,
+    taskStatus: task.status,
+    prState: task.prState,
+    prNumber: task.prNumber,
+    prUrl: task.prUrl,
+    deliveryBranch: task.deliveryBranch,
+    ciStatus: task.ciStatus,
+    ciDetails: task.ciDetails,
+    mergeableState: task.mergeableState,
+    prMergedAt: task.prMergedAt,
+    prClosedAt: task.prClosedAt,
+    lastSyncedAt: new Date()
+  };
+}
+
 module.exports = {
   validateWorkspaceContainment,
   validateBranchName,
@@ -897,6 +1069,7 @@ module.exports = {
   inspectWorkingTree,
   generateExecutionReview,
   deliverTaskToGithub,
+  syncTaskPullRequestStatus,
   callGithubApiWithRetry,
   emitDeliveryEvent,
   GitHubError,

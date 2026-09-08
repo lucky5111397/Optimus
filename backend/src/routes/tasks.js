@@ -25,6 +25,7 @@ router.post('/:id/execution/cancel', executionsController.cancelExecution);
 router.get('/:id/report', tasksController.getReport);
 router.get('/:id/review', tasksController.getTaskReview);
 router.post('/:id/deliver', tasksController.deliverTask);
+router.post('/:id/sync', tasksController.syncTaskPR);
 router.delete('/:id', tasksController.deleteTask);
 
 module.exports = router;

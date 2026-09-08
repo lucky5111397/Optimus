@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ArrowLeft, Play, CheckCircle2, XCircle, Clock, Eye, FileText, GitPullRequest, Loader2, GitMerge, AlertTriangle, ExternalLink, ShieldCheck, Trash2, RotateCcw, Copy, Check } from 'lucide-react';
+import { ArrowLeft, Play, CheckCircle2, XCircle, Clock, Eye, FileText, GitPullRequest, Loader2, GitMerge, AlertTriangle, ExternalLink, ShieldCheck, Trash2, RotateCcw, Copy, Check, RefreshCw } from 'lucide-react';
 import { StatusBadge } from '../../components/ui';
 import ImplementationPlan from './ImplementationPlan';
 import LiveExecution from './LiveExecution';
@@ -191,6 +191,11 @@ export default function TaskDetail({ task, onBack }) {
     const [activePrUrl, setActivePrUrl] = useState(task.prUrl || null);
     const [activePrNumber, setActivePrNumber] = useState(task.prNumber || null);
 
+    const [syncingPr, setSyncingPr] = useState(false);
+    const [prState, setPrState] = useState(task.prState || (task.status === 'MERGED' ? 'merged' : (task.status === 'CLOSED' ? 'closed' : 'open')));
+    const [ciStatus, setCiStatus] = useState(task.ciStatus || 'NONE');
+    const [ciDetails, setCiDetails] = useState(task.ciDetails || null);
+
     const loadReview = () => {
       setLoadingReview(true);
       fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3000/api'}/tasks/${task._id}/review`, {
@@ -212,6 +217,32 @@ export default function TaskDetail({ task, onBack }) {
     useEffect(() => {
       loadReview();
     }, [task._id]);
+
+    const handleSyncPr = async () => {
+      setSyncingPr(true);
+      try {
+        const res = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3000/api'}/tasks/${task._id}/sync`, {
+          method: 'POST',
+          credentials: 'include'
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setPrState(data.prState || 'open');
+          setCiStatus(data.ciStatus || 'NONE');
+          setCiDetails(data.ciDetails || null);
+          if (data.taskStatus) {
+            setCurrentStatus(data.taskStatus);
+          }
+        } else {
+          const errData = await res.json().catch(() => ({}));
+          alert(errData.error || 'Failed to sync PR status');
+        }
+      } catch (err) {
+        console.error('Failed to sync PR:', err);
+      } finally {
+        setSyncingPr(false);
+      }
+    };
 
     const handleDeliver = async () => {
       setDelivering(true);
@@ -237,46 +268,148 @@ export default function TaskDetail({ task, onBack }) {
       }
     };
 
-    if (deliveryState === 'pr_created' || activePrUrl) {
+    if (deliveryState === 'pr_created' || activePrUrl || ['DELIVERED', 'MERGED', 'CLOSED'].includes(currentStatus)) {
+      const isMerged = prState === 'merged' || currentStatus === 'MERGED';
+      const isClosed = (prState === 'closed' || currentStatus === 'CLOSED') && !isMerged;
+
       return (
         <div className="p-6 max-w-4xl mx-auto space-y-6">
-          <div className="bg-background border border-primary/30 rounded-md p-8 shadow-modal text-center">
-            <div className="mx-auto w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mb-4">
-              <GitPullRequest className="w-8 h-8 text-primary" />
-            </div>
-            <h2 className="text-2xl font-heading text-text-primary mb-2">Pull Request Created!</h2>
-            <p className="text-sm text-text-secondary mb-4">
-              Verified changes have been committed, pushed to branch, and a Pull Request was opened against <span className="font-mono text-text-primary">{review?.targetBranch || 'main'}</span>.
-            </p>
+          <div className="bg-background border border-primary/30 rounded-md p-6 shadow-modal space-y-6">
+            <div className="flex items-start justify-between flex-wrap gap-4">
+              <div className="flex items-center gap-3">
+                <div className={`w-12 h-12 rounded-full flex items-center justify-center ${
+                  isMerged ? 'bg-purple-900/30 text-purple-400 border border-purple-800' :
+                  isClosed ? 'bg-gray-800 text-gray-400 border border-gray-700' :
+                  'bg-primary/10 text-primary border border-primary/20'
+                }`}>
+                  {isMerged ? <GitMerge className="w-6 h-6" /> : (isClosed ? <XCircle className="w-6 h-6" /> : <GitPullRequest className="w-6 h-6" />)}
+                </div>
+                <div>
+                  <h2 className="text-xl font-heading text-text-primary">
+                    {isMerged ? 'Pull Request Merged!' : (isClosed ? 'Pull Request Closed' : 'Pull Request Active')}
+                  </h2>
+                  <p className="text-xs text-text-secondary">
+                    {isMerged
+                      ? 'Verified changes have been merged into the target repository branch.'
+                      : (isClosed
+                          ? 'This Pull Request was closed without merging.'
+                          : 'Pull Request is open and awaiting review / CI checks.')}
+                  </p>
+                </div>
+              </div>
 
-            <div className="flex flex-wrap items-center justify-center gap-2 mb-6">
-              {activePrNumber && (
-                <div className="inline-block px-3 py-1 bg-surface border border-border rounded text-xs font-mono text-primary">
-                  PR #{activePrNumber}
-                </div>
-              )}
-              {review?.deliveryBranch && (
-                <div className="inline-block px-3 py-1 bg-surface border border-border rounded text-xs font-mono text-text-secondary">
-                  branch: {review.deliveryBranch}
-                </div>
-              )}
-              {review?.commitSha && (
-                <div className="inline-block px-3 py-1 bg-surface border border-border rounded text-xs font-mono text-text-secondary">
-                  commit: {review.commitSha.substring(0, 7)}
-                </div>
-              )}
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={handleSyncPr}
+                  disabled={syncingPr}
+                  title="Sync latest PR state and CI checks from GitHub"
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-surface border border-border hover:border-primary text-text-secondary hover:text-text-primary rounded text-xs font-mono transition-colors disabled:opacity-50"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${syncingPr ? 'animate-spin text-primary' : ''}`} />
+                  <span>{syncingPr ? 'Syncing...' : 'Sync PR Status'}</span>
+                </button>
+              </div>
             </div>
 
-            <div className="flex justify-center gap-4">
+            {/* Status Pills */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <div className="p-3 bg-surface border border-border rounded-sm">
+                <span className="text-text-secondary block text-xs mb-1">PR Status</span>
+                <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-mono font-medium ${
+                  isMerged ? 'bg-purple-900/30 text-purple-300 border border-purple-800' :
+                  isClosed ? 'bg-gray-800 text-gray-300 border border-gray-700' :
+                  'bg-emerald-900/30 text-emerald-400 border border-emerald-800'
+                }`}>
+                  {isMerged ? <GitMerge className="w-3 h-3" /> : (isClosed ? <XCircle className="w-3 h-3" /> : <CheckCircle2 className="w-3 h-3" />)}
+                  {isMerged ? 'MERGED' : (isClosed ? 'CLOSED' : 'OPEN')}
+                </span>
+              </div>
+
+              <div className="p-3 bg-surface border border-border rounded-sm">
+                <span className="text-text-secondary block text-xs mb-1">CI / Checks</span>
+                <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-mono font-medium ${
+                  ciStatus === 'SUCCESS' ? 'bg-green-900/30 text-green-400 border border-green-800' :
+                  ciStatus === 'FAILURE' ? 'bg-red-900/30 text-red-400 border border-red-800' :
+                  ciStatus === 'PENDING' ? 'bg-yellow-900/30 text-yellow-400 border border-yellow-800' :
+                  'bg-gray-800 text-gray-400 border border-gray-700'
+                }`}>
+                  {ciStatus === 'SUCCESS' ? <ShieldCheck className="w-3 h-3" /> :
+                   ciStatus === 'FAILURE' ? <XCircle className="w-3 h-3" /> :
+                   ciStatus === 'PENDING' ? <Loader2 className="w-3 h-3 animate-spin" /> :
+                   <Clock className="w-3 h-3" />}
+                  {ciStatus}
+                </span>
+              </div>
+
+              <div className="p-3 bg-surface border border-border rounded-sm">
+                <span className="text-text-secondary block text-xs mb-1">Pull Request</span>
+                <span className="text-primary font-mono text-xs font-medium">#{activePrNumber || task.prNumber || 'N/A'}</span>
+              </div>
+
+              <div className="p-3 bg-surface border border-border rounded-sm">
+                <span className="text-text-secondary block text-xs mb-1">Delivery Branch</span>
+                <span className="text-text-primary font-mono text-xs truncate block" title={task.deliveryBranch || review?.deliveryBranch}>
+                  {task.deliveryBranch || review?.deliveryBranch || 'N/A'}
+                </span>
+              </div>
+            </div>
+
+            {/* CI Check Runs Breakdown if present */}
+            {ciDetails?.checkRuns && ciDetails.checkRuns.length > 0 && (
+              <div className="bg-surface border border-border rounded p-4 space-y-2">
+                <div className="flex items-center justify-between text-xs font-mono text-text-secondary">
+                  <span className="flex items-center gap-1.5 font-medium text-text-primary">
+                    <ShieldCheck className="w-3.5 h-3.5 text-primary" />
+                    GitHub Actions & CI Checks ({ciDetails.checkRuns.length})
+                  </span>
+                  {ciDetails.lastSyncedAt && (
+                    <span className="text-[11px] text-text-secondary opacity-70">
+                      Synced {new Date(ciDetails.lastSyncedAt).toLocaleTimeString()}
+                    </span>
+                  )}
+                </div>
+                <div className="space-y-1.5 pt-1">
+                  {ciDetails.checkRuns.map((cr, idx) => (
+                    <div key={idx} className="flex items-center justify-between p-2 bg-background border border-border/60 rounded text-xs font-mono">
+                      <div className="flex items-center gap-2">
+                        <span className={`w-2 h-2 rounded-full ${
+                          cr.conclusion === 'success' ? 'bg-green-400' :
+                          cr.conclusion === 'failure' ? 'bg-red-400' :
+                          'bg-yellow-400'
+                        }`} />
+                        <span className="text-text-primary">{cr.name}</span>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <span className={`px-1.5 py-0.5 rounded text-[10px] uppercase ${
+                          cr.conclusion === 'success' ? 'text-green-400 bg-green-500/10' :
+                          cr.conclusion === 'failure' ? 'text-red-400 bg-red-500/10' :
+                          'text-yellow-400 bg-yellow-500/10'
+                        }`}>
+                          {cr.conclusion || cr.status}
+                        </span>
+                        {cr.htmlUrl && (
+                          <a href={cr.htmlUrl} target="_blank" rel="noopener noreferrer" className="text-text-secondary hover:text-primary">
+                            <ExternalLink className="w-3 h-3" />
+                          </a>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Actions */}
+            <div className="flex justify-between items-center pt-2">
               <button
                 onClick={onBack}
                 className="px-6 py-2 bg-surface border border-border text-text-primary rounded-sm hover:border-primary transition-colors text-sm"
               >
                 Back to Tasks
               </button>
-              {activePrUrl && (
+              {(activePrUrl || task.prUrl) && (
                 <a
-                  href={activePrUrl}
+                  href={activePrUrl || task.prUrl}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="flex items-center gap-2 px-6 py-2 bg-primary text-white rounded-sm hover:bg-opacity-90 transition-colors text-sm font-medium"
@@ -731,6 +864,7 @@ export default function TaskDetail({ task, onBack }) {
         )}
 
         {(currentStatus === 'COMPLETED' || currentStatus === 'VERIFIED' || currentStatus === 'DELIVERED') && <CompletedView />}
+        {(currentStatus === 'COMPLETED' || currentStatus === 'VERIFIED' || currentStatus === 'DELIVERED' || currentStatus === 'MERGED' || currentStatus === 'CLOSED') && <CompletedView />}
 
         {currentStatus === 'FAILED' && <FailedView />}
       </div>

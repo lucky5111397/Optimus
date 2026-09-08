@@ -29,6 +29,9 @@ export default function History() {
       matchesTab = true;
     } else if (activeTab === 'Completed') {
       matchesTab = ['completed', 'verified', 'delivered'].includes(task.status?.toLowerCase());
+      matchesTab = ['completed', 'verified', 'delivered', 'merged'].includes(task.status?.toLowerCase());
+    } else if (activeTab === 'Cancelled') {
+      matchesTab = ['cancelled', 'closed'].includes(task.status?.toLowerCase());
     } else {
       matchesTab = task.status?.toLowerCase() === activeTab.toLowerCase();
     }

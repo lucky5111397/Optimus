@@ -59,7 +59,11 @@ const executionEventSchema = new mongoose.Schema({
       'DELIVERY_PUSHED',
       'DELIVERY_PR_CREATED',
       'DELIVERY_COMPLETED',
-      'DELIVERY_FAILED'
+      'DELIVERY_FAILED',
+      'PR_SYNCHRONIZED',
+      'PR_MERGED',
+      'PR_CLOSED',
+      'CI_CHECK_UPDATED'
     ]
   },
   sequenceNumber: {

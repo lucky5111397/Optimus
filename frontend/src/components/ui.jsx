@@ -1,5 +1,5 @@
 import React from 'react';
-import { CheckCircle2, AlertCircle, Clock, Loader2, XCircle, Pause, Play, Eye, Zap } from 'lucide-react';
+import { CheckCircle2, AlertCircle, Clock, Loader2, XCircle, Pause, Play, Eye, Zap, GitMerge } from 'lucide-react';
 
 const statusConfig = {
   READY:             { label: 'Ready',           bg: 'bg-green-900/30',  text: 'text-green-400',  border: 'border-green-800',  icon: CheckCircle2 },
@@ -22,6 +22,8 @@ const statusConfig = {
   VERIFIED:          { label: 'Verified',         bg: 'bg-emerald-900/30', text: 'text-emerald-400', border: 'border-emerald-800', icon: CheckCircle2 },
   ACCEPTED:          { label: 'Accepted',         bg: 'bg-green-900/30',  text: 'text-green-400',  border: 'border-green-800',  icon: CheckCircle2 },
   DELIVERED:         { label: 'Delivered',        bg: 'bg-teal-900/30',   text: 'text-teal-400',   border: 'border-teal-800',   icon: CheckCircle2 },
+  MERGED:            { label: 'Merged',           bg: 'bg-purple-900/30', text: 'text-purple-400', border: 'border-purple-800', icon: GitMerge },
+  CLOSED:            { label: 'Closed',           bg: 'bg-gray-800',      text: 'text-gray-400',   border: 'border-gray-700',   icon: XCircle },
   RUNNING:           { label: 'Running',          bg: 'bg-blue-900/30',   text: 'text-blue-400',   border: 'border-blue-800',   icon: Play, animate: true },
 };
 
