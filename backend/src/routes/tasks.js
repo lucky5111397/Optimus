@@ -14,6 +14,8 @@ router.post('/:id/plan', tasksController.generatePlan);
 router.get('/:id/plan', tasksController.getTaskPlan);
 router.post('/:id/approve', tasksController.approvePlan);
 router.post('/:id/reject', tasksController.rejectPlan);
+router.get('/:id/messages', tasksController.getTaskMessages);
+router.post('/:id/messages', tasksController.createTaskMessage);
 
 const executionsController = require('../controllers/executions');
 router.post('/:id/execute', executionsController.startExecution);

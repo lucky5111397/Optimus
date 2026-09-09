@@ -5,6 +5,8 @@ export default function ImplementationPlan({ taskId, onApprove, onReject, loadin
   const [plan, setPlan] = useState(null);
   const [loadingPlan, setLoadingPlan] = useState(true);
   const [showMarkdown, setShowMarkdown] = useState(false);
+  const [showRejectModal, setShowRejectModal] = useState(false);
+  const [rejectionFeedback, setRejectionFeedback] = useState('');
 
   useEffect(() => {
     fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3000/api'}/tasks/${taskId}/plan`, {
@@ -227,7 +229,7 @@ export default function ImplementationPlan({ taskId, onApprove, onReject, loadin
 
           <div className="flex gap-3">
             <button 
-              onClick={onReject}
+              onClick={() => setShowRejectModal(true)}
               disabled={loading}
               className="flex items-center gap-2 px-4 py-2 text-sm text-text-secondary hover:text-red-400 hover:bg-red-400/10 rounded-sm transition-colors disabled:opacity-50"
             >
@@ -245,6 +247,51 @@ export default function ImplementationPlan({ taskId, onApprove, onReject, loadin
           </div>
         </div>
       </div>
+
+      {showRejectModal && (
+        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-modal border border-border rounded-lg max-w-md w-full p-6 shadow-modal space-y-4">
+            <div className="flex items-center gap-2 text-amber-400">
+              <AlertTriangle className="w-5 h-5 shrink-0" />
+              <h3 className="font-heading font-semibold text-base text-text-primary">Reject Implementation Plan</h3>
+            </div>
+            <p className="text-xs text-text-secondary leading-relaxed">
+              Explain why this plan is being rejected. Your steering instructions will be persisted to the task conversation and provided to OPTIMUS for the next planning attempt.
+            </p>
+            <textarea
+              value={rejectionFeedback}
+              onChange={(e) => setRejectionFeedback(e.target.value)}
+              placeholder="e.g., Reject plan and use Zustand instead of Redux. Also keep the API layer unchanged..."
+              className="w-full h-28 bg-background border border-border rounded p-3 text-xs text-text-primary placeholder:text-text-secondary/50 focus:outline-none focus:border-primary resize-none font-mono"
+              maxLength={2000}
+            />
+            <div className="flex justify-between items-center text-[11px] text-text-secondary">
+              <span>{rejectionFeedback.length}/2000 chars</span>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => { setShowRejectModal(false); setRejectionFeedback(''); }}
+                  disabled={loading}
+                  className="px-3 py-1.5 text-xs text-text-secondary hover:text-text-primary"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => {
+                    if (onReject) onReject(rejectionFeedback);
+                    setShowRejectModal(false);
+                    setRejectionFeedback('');
+                  }}
+                  disabled={loading}
+                  className="flex items-center gap-1.5 px-4 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded text-xs font-semibold transition-colors disabled:opacity-50"
+                >
+                  {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <XCircle className="w-3.5 h-3.5" />}
+                  Confirm Rejection
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

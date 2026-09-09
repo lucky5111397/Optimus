@@ -2,6 +2,7 @@ const crypto = require('crypto');
 const Task = require('../models/Task');
 const TaskContext = require('../models/TaskContext');
 const TaskPlan = require('../models/TaskPlan');
+const TaskMessage = require('../models/TaskMessage');
 const Repository = require('../models/Repository');
 const RepositoryBranch = require('../models/RepositoryBranch');
 const { buildPlanningPrompt } = require('../ai/prompts');
@@ -70,7 +71,12 @@ async function planTask(taskId, userId) {
   await task.save();
 
   try {
-    const { systemPrompt, userPrompt } = buildPlanningPrompt(task, context);
+    // Fetch conversation & refinement history (bounded retrieval)
+    const conversationHistory = await TaskMessage.find({ taskId: task._id })
+      .sort({ createdAt: 1 })
+      .limit(50);
+
+    const { systemPrompt, userPrompt } = buildPlanningPrompt(task, context, conversationHistory);
     const planData = await aiGateway.generatePlan(systemPrompt, userPrompt);
 
     const planHash = computePlanHash(planData);
@@ -120,6 +126,28 @@ async function planTask(taskId, userId) {
     task.status = 'PLAN_READY';
     task.approvedPlanHash = null;
     await task.save();
+
+    // Step 10: Persist assistant TaskMessage representing the planning response
+    const existingAssistantMsg = await TaskMessage.findOne({
+      taskId: task._id,
+      role: 'assistant',
+      'metadata.planHash': planHash
+    });
+    if (!existingAssistantMsg) {
+      const summaryText = planData.summary || `Implementation plan v${plan.version} generated.`;
+      const assistantMsg = new TaskMessage({
+        taskId: task._id,
+        userId: task.userId,
+        role: 'assistant',
+        content: `Generated Implementation Plan (v${plan.version}): ${summaryText}`,
+        metadata: {
+          isPlanSummary: true,
+          planVersion: plan.version,
+          planHash: plan.planHash
+        }
+      });
+      await assistantMsg.save();
+    }
 
     return { task, plan };
   } catch (error) {

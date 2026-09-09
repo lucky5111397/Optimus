@@ -7,6 +7,7 @@ const User = require('../models/User');
 const Task = require('../models/Task');
 const TaskContext = require('../models/TaskContext');
 const TaskPlan = require('../models/TaskPlan');
+const TaskMessage = require('../models/TaskMessage');
 const Execution = require('../models/Execution');
 const ExecutionEvent = require('../models/ExecutionEvent');
 const { cloneAndIndexRepository } = require('../services/repositoryService');
@@ -324,6 +325,7 @@ exports.deleteRepo = async (req, res) => {
 
     // 3. Cascade delete database records
     await Promise.all([
+      TaskMessage.deleteMany({ taskId: { $in: taskIds } }),
       ExecutionEvent.deleteMany({ taskId: { $in: taskIds } }),
       Execution.deleteMany({ repositoryId: repo._id }),
       TaskPlan.deleteMany({ taskId: { $in: taskIds } }),

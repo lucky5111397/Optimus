@@ -1,10 +1,12 @@
 const Task = require('../models/Task');
 const TaskContext = require('../models/TaskContext');
 const TaskPlan = require('../models/TaskPlan');
+const TaskMessage = require('../models/TaskMessage');
 const Execution = require('../models/Execution');
 const ExecutionEvent = require('../models/ExecutionEvent');
 const Repository = require('../models/Repository');
 const RepositoryBranch = require('../models/RepositoryBranch');
+const { scrubTokens } = require('../agent/toolExecutors');
 
 // GET /api/tasks
 exports.listTasks = async (req, res) => {
@@ -211,9 +213,82 @@ exports.rejectPlan = async (req, res) => {
     task.status = 'CONTEXT_READY';
     await task.save();
 
-    res.json({ message: 'Plan rejected. Task returned to context review.', task });
+    // Handle optional rejection feedback
+    const { feedback } = req.body || {};
+    let feedbackMessage = null;
+    if (feedback && typeof feedback === 'string' && feedback.trim().length > 0) {
+      const scrubbedFeedback = scrubTokens(feedback.trim().substring(0, 5000));
+      feedbackMessage = new TaskMessage({
+        taskId: task._id,
+        userId: req.userId,
+        role: 'user',
+        content: `Plan rejected with feedback: ${scrubbedFeedback}`,
+        metadata: {
+          isRejectionFeedback: true,
+          planVersion: plan ? plan.version : 1,
+          planHash: plan ? plan.planHash : null
+        }
+      });
+      await feedbackMessage.save();
+    }
+
+    res.json({
+      message: 'Plan rejected. Task returned to context review.',
+      task,
+      feedbackMessage
+    });
   } catch (error) {
     console.error('rejectPlan error:', error);
+    res.status(500).json({ error: error.message || 'Server error' });
+  }
+};
+
+// GET /api/tasks/:id/messages
+exports.getTaskMessages = async (req, res) => {
+  try {
+    const task = await Task.findOne({ _id: req.params.id, userId: req.userId });
+    if (!task) return res.status(404).json({ error: 'Task not found' });
+
+    const messages = await TaskMessage.find({ taskId: task._id })
+      .sort({ createdAt: 1 })
+      .limit(100);
+
+    res.json(messages);
+  } catch (error) {
+    console.error('getTaskMessages error:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+};
+
+// POST /api/tasks/:id/messages
+exports.createTaskMessage = async (req, res) => {
+  try {
+    const task = await Task.findOne({ _id: req.params.id, userId: req.userId });
+    if (!task) return res.status(404).json({ error: 'Task not found' });
+
+    const { content, metadata } = req.body || {};
+    if (!content || typeof content !== 'string' || content.trim().length === 0) {
+      return res.status(400).json({ error: 'Message content is required' });
+    }
+
+    if (content.trim().length > 5000) {
+      return res.status(400).json({ error: 'Message content exceeds maximum length of 5000 characters' });
+    }
+
+    // Security: Client cannot forge assistant or system role
+    const scrubbed = scrubTokens(content.trim());
+    const message = new TaskMessage({
+      taskId: task._id,
+      userId: req.userId,
+      role: 'user',
+      content: scrubbed,
+      metadata: metadata && typeof metadata === 'object' ? metadata : {}
+    });
+
+    await message.save();
+    res.status(201).json(message);
+  } catch (error) {
+    console.error('createTaskMessage error:', error);
     res.status(500).json({ error: error.message || 'Server error' });
   }
 };
@@ -338,6 +413,7 @@ exports.deleteTask = async (req, res) => {
     }
 
     await Promise.all([
+      TaskMessage.deleteMany({ taskId: task._id }),
       ExecutionEvent.deleteMany({ taskId: task._id }),
       Execution.deleteMany({ taskId: task._id }),
       TaskPlan.deleteMany({ taskId: task._id }),

@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { ArrowLeft, Play, CheckCircle2, XCircle, Clock, Eye, FileText, GitPullRequest, Loader2, GitMerge, AlertTriangle, ExternalLink, ShieldCheck, Trash2, RotateCcw, Copy, Check, RefreshCw } from 'lucide-react';
+import { ArrowLeft, Play, CheckCircle2, XCircle, Clock, Eye, FileText, GitPullRequest, Loader2, GitMerge, AlertTriangle, ExternalLink, ShieldCheck, Trash2, RotateCcw, Copy, Check, RefreshCw, MessageSquare } from 'lucide-react';
 import { StatusBadge } from '../../components/ui';
 import ImplementationPlan from './ImplementationPlan';
 import LiveExecution from './LiveExecution';
+import TaskChat from './TaskChat';
 
 export default function TaskDetail({ task, onBack }) {
   const [currentStatus, setCurrentStatus] = useState(task.status);
@@ -10,6 +11,7 @@ export default function TaskDetail({ task, onBack }) {
   const [loadingAction, setLoadingAction] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [showChat, setShowChat] = useState(true);
 
   const handleDeleteTask = async () => {
     setDeleting(true);
@@ -109,15 +111,18 @@ export default function TaskDetail({ task, onBack }) {
     }
   };
 
-  const rejectPlan = async () => {
+  const rejectPlan = async (feedback) => {
     setLoadingAction(true);
     try {
       const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3000/api'}/tasks/${task._id}/reject`, {
         method: 'POST',
-        credentials: 'include'
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ feedback: typeof feedback === 'string' ? feedback : undefined })
       });
       if (response.ok) {
         setCurrentStatus('CONTEXT_READY');
+        setShowChat(true);
       } else {
         const errData = await response.json();
         alert(errData.error || 'Failed to reject plan');
@@ -832,6 +837,16 @@ export default function TaskDetail({ task, onBack }) {
           </div>
         </div>
         <div className="flex items-center gap-3">
+          <button
+            onClick={() => setShowChat(!showChat)}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-mono border transition-colors ${
+              showChat ? 'bg-primary/15 border-primary/40 text-primary' : 'bg-surface border-border text-text-secondary hover:text-text-primary'
+            }`}
+            title="Toggle Task Conversation & Steering"
+          >
+            <MessageSquare size={14} />
+            <span>Chat & Steering</span>
+          </button>
           <StatusBadge status={currentStatus} />
           <button
             onClick={() => setShowDeleteModal(true)}
@@ -843,30 +858,37 @@ export default function TaskDetail({ task, onBack }) {
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto">
-        {(currentStatus === 'CONTEXT_READY' || currentStatus === 'ANALYZING' || currentStatus === 'PLANNING') && <AnalyzingState />}
+      <div className="flex-1 flex overflow-hidden">
+        <div className="flex-1 overflow-y-auto">
+          {(currentStatus === 'CONTEXT_READY' || currentStatus === 'ANALYZING' || currentStatus === 'PLANNING') && <AnalyzingState />}
 
-        {(currentStatus === 'PLAN_READY' || currentStatus === 'AWAITING_APPROVAL') && (
-          <ImplementationPlan
-            taskId={task._id}
-            onApprove={approvePlan}
-            onReject={rejectPlan}
-            loading={loadingAction}
-          />
+          {(currentStatus === 'PLAN_READY' || currentStatus === 'AWAITING_APPROVAL') && (
+            <ImplementationPlan
+              taskId={task._id}
+              onApprove={approvePlan}
+              onReject={rejectPlan}
+              loading={loadingAction}
+            />
+          )}
+
+          {['IMPLEMENTING', 'TESTING', 'VALIDATING', 'RUNNING', 'DIAGNOSING', 'RETRYING', 'VERIFYING'].includes(currentStatus) && (
+            <LiveExecution
+              taskId={task._id}
+              onComplete={() => setCurrentStatus('VERIFIED')}
+              onFailed={() => setCurrentStatus('FAILED')}
+            />
+          )}
+
+          {(currentStatus === 'COMPLETED' || currentStatus === 'VERIFIED' || currentStatus === 'DELIVERED' || currentStatus === 'MERGED' || currentStatus === 'CLOSED') && <CompletedView />}
+
+          {currentStatus === 'FAILED' && <FailedView />}
+        </div>
+
+        {showChat && (
+          <div className="w-80 lg:w-96 flex-none border-l border-border bg-background flex flex-col">
+            <TaskChat taskId={task._id} />
+          </div>
         )}
-
-        {['IMPLEMENTING', 'TESTING', 'VALIDATING', 'RUNNING', 'DIAGNOSING', 'RETRYING', 'VERIFYING'].includes(currentStatus) && (
-          <LiveExecution
-            taskId={task._id}
-            onComplete={() => setCurrentStatus('VERIFIED')}
-            onFailed={() => setCurrentStatus('FAILED')}
-          />
-        )}
-
-        {(currentStatus === 'COMPLETED' || currentStatus === 'VERIFIED' || currentStatus === 'DELIVERED') && <CompletedView />}
-        {(currentStatus === 'COMPLETED' || currentStatus === 'VERIFIED' || currentStatus === 'DELIVERED' || currentStatus === 'MERGED' || currentStatus === 'CLOSED') && <CompletedView />}
-
-        {currentStatus === 'FAILED' && <FailedView />}
       </div>
 
       {showDeleteModal && (
