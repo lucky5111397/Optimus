@@ -20,6 +20,7 @@ router.post('/:id/messages', tasksController.createTaskMessage);
 const executionsController = require('../controllers/executions');
 router.post('/:id/execute', executionsController.startExecution);
 router.get('/:id/execution', executionsController.getExecution);
+router.get('/:id/execution/stream', executionsController.streamExecutionEvents);
 router.get('/:id/execution/events', executionsController.getExecutionEvents);
 router.get('/:id/execution/audit', executionsController.getExecutionAudit);
 router.post('/:id/execution/cancel', executionsController.cancelExecution);

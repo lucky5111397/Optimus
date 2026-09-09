@@ -19,77 +19,123 @@ export default function LiveExecution({ taskId, onComplete, onFailed, readOnly =
   const lastSequenceRef = useRef(0);
   const currentTraceRef = useRef(null);
 
-  // Incremental event retrieval using sequence cursors
-  const fetchAuditEvents = async () => {
+  // Baseline execution fetch
+  const fetchExecution = async () => {
     try {
-      const sinceSeq = lastSequenceRef.current;
       const res = await fetch(
-        `${import.meta.env.VITE_API_URL || 'http://localhost:3000/api'}/tasks/${taskId}/execution/events?sinceSequence=${sinceSeq}`,
+        `${import.meta.env.VITE_API_URL || 'http://localhost:3000/api'}/tasks/${taskId}/execution`,
         { credentials: 'include' }
       );
       if (!res.ok) return;
-      const newEvents = await res.json();
-
-      if (Array.isArray(newEvents) && newEvents.length > 0) {
-        setAuditEvents(prev => {
-          const existingIds = new Set(prev.map(e => e._id || `${e.sequenceNumber}-${e.timestamp}`));
-          const uniqueIncoming = newEvents.filter(e => !existingIds.has(e._id || `${e.sequenceNumber}-${e.timestamp}`));
-          if (uniqueIncoming.length === 0) return prev;
-          const merged = [...prev, ...uniqueIncoming].sort((a, b) => (a.sequenceNumber || 0) - (b.sequenceNumber || 0));
-          return merged;
-        });
-
-        // Update cursor to highest sequence received
-        const maxSeq = Math.max(...newEvents.map(e => e.sequenceNumber || 0));
-        if (maxSeq > lastSequenceRef.current) {
-          lastSequenceRef.current = maxSeq;
-        }
+      const data = await res.json();
+      if (data.traceId && currentTraceRef.current && currentTraceRef.current !== data.traceId) {
+        lastSequenceRef.current = 0;
+        setAuditEvents([]);
       }
+      currentTraceRef.current = data.traceId;
+      setExecution(data);
+      return data;
     } catch (err) {
-      console.error('Error fetching incremental audit events:', err);
+      console.error('Execution fetch error:', err);
     }
   };
 
-  // Execution polling interval
+  // Real-time Execution SSE streaming
   useEffect(() => {
-    // Reset sequence cursor if taskId changes
     lastSequenceRef.current = 0;
     setAuditEvents([]);
 
-    const pollExecution = () => {
-      fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3000/api'}/tasks/${taskId}/execution`, {
-        credentials: 'include'
-      })
-        .then(res => res.json())
-        .then(data => {
-          // If trace changed, this is a fresh run (e.g. after retry)
-          if (data.traceId && currentTraceRef.current && currentTraceRef.current !== data.traceId) {
-            lastSequenceRef.current = 0;
-            setAuditEvents([]);
+    // Baseline fetch of execution state
+    fetchExecution();
+
+    // Connect to real-time Server-Sent Events (SSE) stream
+    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
+    const sseUrl = `${apiUrl}/tasks/${taskId}/execution/stream`;
+    const eventSource = new EventSource(sseUrl, { withCredentials: true });
+
+    eventSource.onmessage = (event) => {
+      try {
+        if (!event.data) return;
+        const data = JSON.parse(event.data);
+
+        // 1. Audit / Lifecycle Events
+        if (data.eventType && data.eventType !== 'LOG' && data.eventType !== 'stdout' && data.eventType !== 'stderr') {
+          setAuditEvents(prev => {
+            const existingIds = new Set(prev.map(e => e._id || `${e.sequenceNumber}-${e.timestamp}`));
+            const key = data._id || `${data.sequenceNumber}-${data.timestamp}`;
+            if (existingIds.has(key)) return prev;
+            return [...prev, data].sort((a, b) => (a.sequenceNumber || 0) - (b.sequenceNumber || 0));
+          });
+          if (data.sequenceNumber && data.sequenceNumber > lastSequenceRef.current) {
+            lastSequenceRef.current = data.sequenceNumber;
           }
-          currentTraceRef.current = data.traceId;
-          setExecution(data);
+        }
 
-          // Fetch incremental audit events
-          fetchAuditEvents();
+        // 2. Terminal Logs (stdout, stderr, system)
+        if (data.type === 'log' || data.eventType === 'LOG' || data.stream) {
+          setExecution(prev => {
+            if (!prev) return prev;
+            const existingLogs = prev.executionLogs ? [...prev.executionLogs] : [];
+            const logEntry = {
+              timestamp: data.timestamp || new Date().toISOString(),
+              stream: data.stream || 'system',
+              text: data.text || data.summary || ''
+            };
+            const isDup = existingLogs.length > 0 &&
+              existingLogs[existingLogs.length - 1].text === logEntry.text &&
+              existingLogs[existingLogs.length - 1].stream === logEntry.stream;
+            if (!isDup) {
+              existingLogs.push(logEntry);
+            }
+            return { ...prev, executionLogs: existingLogs };
+          });
+        }
 
+        // 3. Execution / Progress State Updates
+        if (data.status || data.stepIndex !== undefined || data.totalSteps !== undefined || data.traceId || data.metadata) {
+          setExecution(prev => {
+            if (!prev) return prev;
+            const updated = { ...prev };
+            if (data.status) updated.status = data.status;
+            if (data.taskStatus) updated.taskStatus = data.taskStatus;
+            if (data.stepIndex !== undefined) updated.currentStep = data.stepIndex;
+            if (data.totalSteps !== undefined) updated.totalSteps = data.totalSteps;
+            if (data.traceId) updated.traceId = data.traceId;
+            if (data.metadata) updated.metadata = { ...updated.metadata, ...data.metadata };
+            return updated;
+          });
+        }
+
+        // 4. Handle Terminal Stream Status
+        const status = data.status;
+        const eventType = data.eventType;
+        const isTerminal = ['COMPLETED', 'VERIFIED', 'FAILED', 'CANCELLED'].includes(status) ||
+                           ['EXECUTION_COMPLETED', 'EXECUTION_FAILED', 'EXECUTION_CANCELLED'].includes(eventType);
+
+        if (isTerminal) {
+          eventSource.close();
+          fetchExecution();
           if (!readOnly) {
-            if (['COMPLETED', 'VERIFIED'].includes(data.status)) {
-              clearInterval(interval);
+            if (['COMPLETED', 'VERIFIED'].includes(status) || eventType === 'EXECUTION_COMPLETED') {
               if (onComplete) setTimeout(onComplete, 1200);
-            } else if (['FAILED', 'CANCELLED'].includes(data.status)) {
-              clearInterval(interval);
+            } else if (['FAILED', 'CANCELLED'].includes(status) || ['EXECUTION_FAILED', 'EXECUTION_CANCELLED'].includes(eventType)) {
               if (onFailed) setTimeout(onFailed, 1200);
             }
           }
-        })
-        .catch(err => console.error('Execution poll error:', err));
+        }
+      } catch (parseErr) {
+        console.error('Error parsing SSE event data:', parseErr);
+      }
     };
 
-    pollExecution();
-    const interval = setInterval(pollExecution, 2000);
+    eventSource.onerror = (err) => {
+      eventSource.close();
+      fetchExecution();
+    };
 
-    return () => clearInterval(interval);
+    return () => {
+      eventSource.close();
+    };
   }, [taskId, onComplete, onFailed, readOnly]);
 
   // Terminal scroll handling

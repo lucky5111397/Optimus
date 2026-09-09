@@ -22,7 +22,48 @@ const MAX_REPEATED_TOOL_CALLS = 3;    // Prevent infinite loop on identical tool
 const MAX_VALIDATION_ATTEMPTS = 3;    // Maximum self-correction attempts
 const MAX_CORRECTION_TURNS = 10;      // Maximum turns per correction attempt
 
-async function logSystem(executionId, text, stream = 'system') {
+const EventEmitter = require('events');
+const executionEmitter = new EventEmitter();
+executionEmitter.setMaxListeners(200);
+
+function mapToolToAction(funcName) {
+  switch (funcName) {
+    case 'read_file': return 'readFile';
+    case 'create_file': return 'writeFile';
+    case 'apply_patch': return 'editFile';
+    case 'run_validation': return 'runCommand';
+    default: return funcName;
+  }
+}
+
+function emitExecutionEvent(taskId, eventPayload) {
+  if (!taskId || !eventPayload) return;
+  try {
+    const raw = typeof eventPayload.toObject === 'function' ? eventPayload.toObject() : { ...eventPayload };
+    const safePayload = {
+      ...raw,
+      taskId: taskId.toString(),
+      type: raw.eventType || raw.type || 'event',
+      eventType: raw.eventType || raw.type || 'event',
+      timestamp: raw.timestamp || new Date()
+    };
+    if (typeof safePayload.summary === 'string') {
+      safePayload.summary = scrubTokens(safePayload.summary);
+    }
+    if (typeof safePayload.text === 'string') {
+      safePayload.text = scrubTokens(safePayload.text);
+    }
+    if (typeof safePayload.output === 'string') {
+      safePayload.output = scrubTokens(safePayload.output);
+    }
+    executionEmitter.emit('task:' + taskId.toString(), safePayload);
+    executionEmitter.emit('event', safePayload);
+  } catch (err) {
+    console.error('Error emitting execution event:', err);
+  }
+}
+
+async function logSystem(executionId, text, stream = 'system', taskId = null) {
   const safeText = scrubTokens(typeof text === 'string' ? text : (text?.output || String(text)));
   try {
     await Execution.findByIdAndUpdate(executionId, {
@@ -124,7 +165,7 @@ async function executeTask(taskId, userId) {
 
   // Record EXECUTION_STARTED audit event
   try {
-    await recordEvent({
+    await recordAndEmit({
       executionId: execution._id,
       taskId: task._id,
       userId,
@@ -146,9 +187,9 @@ async function executeTask(taskId, userId) {
         const proc = spawn('git', ['checkout', '-B', branchName], { cwd: workspacePath, shell: false });
         proc.on('close', (code) => code === 0 ? resolve() : reject(new Error('Git branch failed')));
       });
-      await logSystem(execution._id, `Created isolated git branch: ${branchName}`);
+      await log(`Created isolated git branch: ${branchName}`);
     } catch(err) {
-      await logSystem(execution._id, `Warning: Could not create git branch. Executing in current branch.`);
+      await log(`Warning: Could not create git branch. Executing in current branch.`);
     }
 
     // 2. Iterate Plan Steps with Bounded Agent Loop
@@ -163,11 +204,11 @@ async function executeTask(taskId, userId) {
       await execution.save();
       heartbeatLock(taskId);
 
-      await logSystem(execution._id, `Starting Step ${i + 1}: ${step.title}`);
+      await log(`Starting Step ${i + 1}: ${step.title}`);
 
       // Record STEP_STARTED audit event
       try {
-        await recordEvent({
+        await recordAndEmit({
           executionId: execution._id,
           taskId: task._id,
           userId,
@@ -211,7 +252,7 @@ async function executeTask(taskId, userId) {
 
         // Record AI_TURN_STARTED audit event
         try {
-          await recordEvent({
+          await recordAndEmit({
             executionId: execution._id,
             taskId: task._id,
             userId,
@@ -247,7 +288,7 @@ async function executeTask(taskId, userId) {
 
         // Record AI_TURN_COMPLETED audit event
         try {
-          await recordEvent({
+          await recordAndEmit({
             executionId: execution._id,
             taskId: task._id,
             userId,
@@ -271,7 +312,7 @@ async function executeTask(taskId, userId) {
         messages.push(responseMessage);
 
         if (responseMessage.content) {
-          await logSystem(execution._id, `AI: ${responseMessage.content}`, 'stdout');
+          await log(`AI: ${responseMessage.content}`, 'stdout');
         }
 
         if (responseMessage.tool_calls && responseMessage.tool_calls.length > 0) {
@@ -298,7 +339,7 @@ async function executeTask(taskId, userId) {
               repeatedToolCount = 1;
             }
 
-            await logSystem(execution._id, `Executing Tool: ${funcName}(${JSON.stringify(args)})`, 'system');
+            await log(`Executing Tool: ${funcName}(${JSON.stringify(args)})`, 'system');
 
             if (funcName === 'complete_step') {
               stepComplete = true;
@@ -312,7 +353,7 @@ async function executeTask(taskId, userId) {
 
             // Record TOOL_CALL_STARTED audit event
             try {
-              await recordEvent({
+              await recordAndEmit({
                 executionId: execution._id,
                 taskId: task._id,
                 userId,
@@ -339,7 +380,7 @@ async function executeTask(taskId, userId) {
 
             // Record TOOL_CALL_COMPLETED audit event
             try {
-              await recordEvent({
+              await recordAndEmit({
                 executionId: execution._id,
                 taskId: task._id,
                 userId,
@@ -396,7 +437,7 @@ async function executeTask(taskId, userId) {
     await task.save();
     heartbeatLock(taskId);
 
-    await logSystem(execution._id, `Starting validation phase...`);
+    await log(`Starting validation phase...`);
 
     // Check if package.json exists to determine validation scripts
     const pkgPath = path.join(workspacePath, 'package.json');
@@ -429,11 +470,11 @@ async function executeTask(taskId, userId) {
         } catch (_) {}
 
         if (!nodeModulesExist && (pkg.dependencies || pkg.devDependencies)) {
-          await logSystem(execution._id, `Running validation preparation (npm install)...`);
+          await log(`Running validation preparation (npm install)...`);
           const installRes = await executeTool('run_validation', { command: 'npm install', timeoutMs: 60000 }, workspacePath);
-          await logSystem(execution._id, installRes.output || String(installRes), 'stdout');
+          await log(installRes.output || String(installRes), 'stdout');
           if (installRes.exitCode !== 0) {
-            await logSystem(execution._id, `Warning: npm install exited with code ${installRes.exitCode}`, 'stderr');
+            await log(`Warning: npm install exited with code ${installRes.exitCode}`, 'stderr');
           }
         }
 
@@ -452,7 +493,7 @@ async function executeTask(taskId, userId) {
           task.status = validationAttempts === 1 ? 'TESTING' : 'VERIFYING';
           await task.save();
 
-          await logSystem(execution._id, `Validation Attempt ${validationAttempts} of ${MAX_VALIDATION_ATTEMPTS}...`);
+          await log(`Validation Attempt ${validationAttempts} of ${MAX_VALIDATION_ATTEMPTS}...`);
 
           let currentAttemptPassed = true;
           let failureDetails = null;
@@ -460,11 +501,11 @@ async function executeTask(taskId, userId) {
           for (const cmd of validationCommands) {
             if (abortController.signal.aborted) throw new Error('Execution cancelled');
 
-            await logSystem(execution._id, `Running validation command: ${cmd} (Attempt ${validationAttempts})...`);
+            await log(`Running validation command: ${cmd} (Attempt ${validationAttempts})...`);
 
             // Record VALIDATION_STARTED audit event
             try {
-              await recordEvent({
+              await recordAndEmit({
                 executionId: execution._id,
                 taskId: task._id,
                 userId,
@@ -478,13 +519,13 @@ async function executeTask(taskId, userId) {
 
             const runRes = await executeTool('run_validation', { command: cmd, timeoutMs: 60000 }, workspacePath);
             const outputText = runRes.output || String(runRes);
-            await logSystem(execution._id, outputText, runRes.exitCode === 0 ? 'stdout' : 'stderr');
+            await log(outputText, runRes.exitCode === 0 ? 'stdout' : 'stderr');
 
             const isPassed = runRes.passed === true && runRes.exitCode === 0;
 
             // Record VALIDATION_COMPLETED audit event
             try {
-              await recordEvent({
+              await recordAndEmit({
                 executionId: execution._id,
                 taskId: task._id,
                 userId,
@@ -521,12 +562,12 @@ async function executeTask(taskId, userId) {
 
           if (currentAttemptPassed) {
             validationSuccess = true;
-            await logSystem(execution._id, `Validation successful on attempt ${validationAttempts}! All checks passed.`);
+            await log(`Validation successful on attempt ${validationAttempts}! All checks passed.`);
             break;
           }
 
           if (validationAttempts >= MAX_VALIDATION_ATTEMPTS) {
-            await logSystem(execution._id, `Validation failed after maximum ${MAX_VALIDATION_ATTEMPTS} retry attempts.`, 'stderr');
+            await log(`Validation failed after maximum ${MAX_VALIDATION_ATTEMPTS} retry attempts.`, 'stderr');
             break;
           }
 
@@ -537,15 +578,15 @@ async function executeTask(taskId, userId) {
           // Agent self-correction loop
           task.status = 'DIAGNOSING';
           await task.save();
-          await logSystem(execution._id, `Validation failed on attempt ${validationAttempts}. Diagnosing failure: ${failureDetails?.command} exited with code ${failureDetails?.exitCode}`);
+          await log(`Validation failed on attempt ${validationAttempts}. Diagnosing failure: ${failureDetails?.command} exited with code ${failureDetails?.exitCode}`);
 
           task.status = 'RETRYING';
           await task.save();
-          await logSystem(execution._id, `Initiating agent self-correction turn (Attempt ${validationAttempts + 1}/${MAX_VALIDATION_ATTEMPTS})...`);
+          await log(`Initiating agent self-correction turn (Attempt ${validationAttempts + 1}/${MAX_VALIDATION_ATTEMPTS})...`);
 
           // Record SELF_CORRECTION_STARTED audit event
           try {
-            await recordEvent({
+            await recordAndEmit({
               executionId: execution._id,
               taskId: task._id,
               userId,
@@ -604,7 +645,7 @@ async function executeTask(taskId, userId) {
             valMessages.push(responseMessage);
 
             if (responseMessage.content) {
-              await logSystem(execution._id, `AI: ${responseMessage.content}`, 'stdout');
+              await log(`AI: ${responseMessage.content}`, 'stdout');
             }
 
             if (responseMessage.tool_calls && responseMessage.tool_calls.length > 0) {
@@ -631,7 +672,7 @@ async function executeTask(taskId, userId) {
                   repeatedToolCount = 1;
                 }
 
-                await logSystem(execution._id, `Executing Tool: ${funcName}(${JSON.stringify(args)})`, 'system');
+                await log(`Executing Tool: ${funcName}(${JSON.stringify(args)})`, 'system');
 
                 if (funcName === 'complete_step') {
                   valStepComplete = true;
@@ -661,16 +702,16 @@ async function executeTask(taskId, userId) {
 
           // Check if no progress was made on an identical failure
           if (currentSignature === previousFailureSignature && changedFiles.size === filesBeforeCorrection) {
-            await logSystem(execution._id, `Repeated validation failure with no progress detected. Halting self-correction.`, 'stderr');
+            await log(`Repeated validation failure with no progress detected. Halting self-correction.`, 'stderr');
             break;
           }
           previousFailureSignature = currentSignature;
         }
       } else {
-        await logSystem(execution._id, `No test, build, or lint scripts configured in package.json. Validation passed by default.`);
+        await log(`No test, build, or lint scripts configured in package.json. Validation passed by default.`);
       }
     } else {
-      await logSystem(execution._id, `No package.json found. Validation passed by default.`);
+      await log(`No package.json found. Validation passed by default.`);
     }
 
     // Persist structured validation results
@@ -688,7 +729,7 @@ async function executeTask(taskId, userId) {
 
     // Final Git Diff
     const diff = await executeTool('git_diff', {}, workspacePath);
-    await logSystem(execution._id, `Final Workspace Diff:\n${diff}`, 'stdout');
+    await log(`Final Workspace Diff:\n${diff}`, 'stdout');
 
     execution.status = 'COMPLETED';
     execution.completedAt = new Date();
@@ -720,7 +761,7 @@ async function executeTask(taskId, userId) {
 
     // Record EXECUTION_COMPLETED audit event
     try {
-      await recordEvent({
+      await recordAndEmit({
         executionId: execution._id,
         taskId: task._id,
         userId,
@@ -778,15 +819,15 @@ async function executeTask(taskId, userId) {
     task.status = execution.status;
     await task.save();
 
-    await logSystem(execution._id, `Execution Terminated [${failureCategory}]: ${error.message}`, 'stderr');
+    await log(`Execution Terminated [${failureCategory}]: ${error.message}`, 'stderr');
 
     // Rollback changes using git: reset tracked files and clean untracked files
     try {
-      await logSystem(execution._id, `Attempting rollback via git...`);
+      await log(`Attempting rollback via git...`);
 
       // Record ROLLBACK_STARTED audit event
       try {
-        await recordEvent({
+        await recordAndEmit({
           executionId: execution._id,
           taskId: task._id,
           userId,
@@ -806,11 +847,11 @@ async function executeTask(taskId, userId) {
         const proc = spawn('git', ['clean', '-fd'], { cwd: workspacePath, shell: false });
         proc.on('close', code => code === 0 ? resolve() : reject(new Error('git clean failed')));
       });
-      await logSystem(execution._id, `Rollback successful: git reset --hard HEAD and git clean -fd completed.`);
+      await log(`Rollback successful: git reset --hard HEAD and git clean -fd completed.`);
 
       // Record ROLLBACK_COMPLETED audit event
       try {
-        await recordEvent({
+        await recordAndEmit({
           executionId: execution._id,
           taskId: task._id,
           userId,
@@ -824,7 +865,7 @@ async function executeTask(taskId, userId) {
     } catch (e) {
       // Record ROLLBACK_FAILED audit event
       try {
-        await recordEvent({
+        await recordAndEmit({
           executionId: execution._id,
           taskId: task._id,
           userId,
@@ -838,7 +879,7 @@ async function executeTask(taskId, userId) {
 
     // Record EXECUTION_FAILED or EXECUTION_CANCELLED audit event
     try {
-      await recordEvent({
+      await recordAndEmit({
         executionId: execution._id,
         taskId: task._id,
         userId,
@@ -886,5 +927,7 @@ module.exports = {
   executeTask,
   cancelExecution,
   abortAllActiveExecutions,
-  activeExecutions
+  activeExecutions,
+  executionEmitter,
+  emitExecutionEvent
 };

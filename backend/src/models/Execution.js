@@ -53,5 +53,7 @@ const executionSchema = new mongoose.Schema({
   failureDetails: { type: mongoose.Schema.Types.Mixed }
 }, { timestamps: true });
 
+executionSchema.index({ taskId: 1, createdAt: -1 });
+
 module.exports = mongoose.model('Execution', executionSchema);
 

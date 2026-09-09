@@ -28,7 +28,6 @@ export default function History() {
     if (activeTab === 'All') {
       matchesTab = true;
     } else if (activeTab === 'Completed') {
-      matchesTab = ['completed', 'verified', 'delivered'].includes(task.status?.toLowerCase());
       matchesTab = ['completed', 'verified', 'delivered', 'merged'].includes(task.status?.toLowerCase());
     } else if (activeTab === 'Cancelled') {
       matchesTab = ['cancelled', 'closed'].includes(task.status?.toLowerCase());

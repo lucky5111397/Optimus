@@ -25,7 +25,6 @@ exports.getActivity = async (req, res) => {
     for (const task of recentTasks) {
       const repoName = task.repositoryId ? `${task.repositoryId.owner}/${task.repositoryId.name}` : 'Unknown';
       
-      if (task.status === 'DELIVERED') {
       if (task.status === 'MERGED') {
         activity.push({
           id: `task-merged-${task._id}`,

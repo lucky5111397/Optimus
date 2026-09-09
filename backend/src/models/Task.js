@@ -80,5 +80,9 @@ const taskSchema = new mongoose.Schema({
   }
 }, { timestamps: true });
 
+taskSchema.index({ userId: 1, repositoryId: 1 });
+taskSchema.index({ userId: 1, status: 1 });
+taskSchema.index({ deliveryBranch: 1 }, { sparse: true });
+
 module.exports = mongoose.model('Task', taskSchema);
 

@@ -16,7 +16,6 @@ const repositoriesRoutes = require('./routes/repositories');
 const tasksRoutes = require('./routes/tasks');
 const apiRoutes = require('./routes/api');
 const settingsRoutes = require('./routes/settings');
-const { authLimiter, taskLimiter } = require('./middleware/rateLimit');
 const webhookRoutes = require('./routes/webhooks');
 const { authLimiter, taskLimiter, webhookLimiter } = require('./middleware/rateLimit');
 
@@ -56,7 +55,6 @@ app.use(cors({
   },
   credentials: true
 }));
-app.use(express.json());
 app.use(express.json({ verify: (req, res, buf) => { req.rawBody = buf; } }));
 app.use(cookieParser());
 

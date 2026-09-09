@@ -10,10 +10,8 @@ exports.getAnalytics = async (req, res) => {
 
     // Count tasks by status
     const totalTasks = await Task.countDocuments({ userId });
-    const completedTasks = await Task.countDocuments({ userId, status: { $in: ['COMPLETED', 'VERIFIED', 'DELIVERED'] } });
     const completedTasks = await Task.countDocuments({ userId, status: { $in: ['COMPLETED', 'VERIFIED', 'DELIVERED', 'MERGED'] } });
     const failedTasks = await Task.countDocuments({ userId, status: 'FAILED' });
-    const activeTasks = await Task.countDocuments({ userId, status: { $nin: ['COMPLETED', 'VERIFIED', 'DELIVERED', 'FAILED', 'CANCELLED'] } });
     const activeTasks = await Task.countDocuments({ userId, status: { $nin: ['COMPLETED', 'VERIFIED', 'DELIVERED', 'MERGED', 'CLOSED', 'FAILED', 'CANCELLED'] } });
 
     // Success rate
