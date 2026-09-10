@@ -13,6 +13,7 @@ import EngineeringReport from './pages/Report';
 
 // Public Onboarding
 import Welcome from './pages/Welcome';
+import LearnMore from './pages/LearnMore';
 import ProfileSetup from './pages/ProfileSetup';
 
 // Repositories & Workspace
@@ -64,6 +65,7 @@ function App() {
         <Routes>
           {/* Public & Onboarding */}
           <Route path="/" element={<Welcome />} />
+          <Route path="/learn-more" element={<LearnMore />} />
           <Route path="/login" element={<Login />} />
           <Route path="/setup" element={<ProfileSetup />} />
 
