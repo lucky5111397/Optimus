@@ -1,0 +1,22 @@
+{
+  "id": "fixture-01-syntax-bug",
+  "title": "Fix Null Pointer in User Profile Formatter",
+  "category": "BUG_FIX",
+  "difficulty": "EASY",
+  "description": "Fix TypeError in formatUserProfile when user.metadata or user.metadata.preferences is null or undefined.",
+  "taskPrompt": "In src/index.js, ensure formatUserProfile safely handles missing or null metadata and preferences objects without throwing a TypeError, defaulting theme to 'dark', notificationsEnabled to false, and tags to an empty array.",
+  "expectedChangedFiles": [
+    "src/index.js"
+  ],
+  "forbiddenChangedFiles": [
+    "test.js",
+    "package.json"
+  ],
+  "baselineExpectation": {
+    "expectedExitCode": 1,
+    "expectedErrorPattern": "TypeError"
+  },
+  "timeoutMs": 60000,
+  "maxTurns": 10,
+  "tokenBudget": 25000
+}

@@ -1,0 +1,22 @@
+{
+  "id": "fixture-04-token-redaction",
+  "title": "Scrub Bearer Tokens and OpenRouter Keys in Log Sanitizer",
+  "category": "SECURITY",
+  "difficulty": "EASY",
+  "description": "sanitizeLogs leaves OpenRouter API keys and Authorization Bearer tokens exposed in log strings.",
+  "taskPrompt": "In src/sanitizer.js, extend sanitizeLogs to redact OpenRouter API keys (matching sk-or-v1-[a-zA-Z0-9]+) with '[REDACTED_API_KEY]' and Authorization Bearer tokens (matching /Bearer\\\\s+[a-zA-Z0-9._-]+/gi) with 'Bearer [REDACTED_TOKEN]', while preserving existing GitHub token redaction.",
+  "expectedChangedFiles": [
+    "src/sanitizer.js"
+  ],
+  "forbiddenChangedFiles": [
+    "test.js",
+    "package.json"
+  ],
+  "baselineExpectation": {
+    "expectedExitCode": 1,
+    "expectedErrorPattern": "AssertionError"
+  },
+  "timeoutMs": 60000,
+  "maxTurns": 10,
+  "tokenBudget": 25000
+}
