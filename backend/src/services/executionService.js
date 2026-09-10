@@ -63,6 +63,16 @@ function emitExecutionEvent(taskId, eventPayload) {
   }
 }
 
+async function recordAndEmit(eventData) {
+  try {
+    const event = await recordEvent(eventData);
+    emitExecutionEvent(eventData.taskId, event || eventData);
+    return event;
+  } catch (err) {
+    emitExecutionEvent(eventData.taskId, eventData);
+  }
+}
+
 async function logSystem(executionId, text, stream = 'system', taskId = null) {
   const safeText = scrubTokens(typeof text === 'string' ? text : (text?.output || String(text)));
   try {
@@ -146,6 +156,8 @@ async function executeTask(taskId, userId) {
     execution.validationResults = null;
     await execution.save();
   }
+
+  const log = async (text, stream = 'system') => logSystem(execution._id, text, stream, task._id);
 
   resetSequenceCounter(execution._id);
 

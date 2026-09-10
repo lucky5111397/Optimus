@@ -1,0 +1,22 @@
+{
+  "id": "fixture-05-api-refactor",
+  "title": "Standardize API Error Response Envelope",
+  "category": "REFACTOR",
+  "difficulty": "EASY",
+  "description": "formatError returns flat errorCode/errorMessage properties rather than the standard nested error envelope.",
+  "taskPrompt": "In src/responseFormatter.js, refactor formatError to return { success: false, error: { code, message, details } } where details defaults to null if not provided, ensuring full compatibility with the API error envelope standard.",
+  "expectedChangedFiles": [
+    "src/responseFormatter.js"
+  ],
+  "forbiddenChangedFiles": [
+    "test.js",
+    "package.json"
+  ],
+  "baselineExpectation": {
+    "expectedExitCode": 1,
+    "expectedErrorPattern": "AssertionError"
+  },
+  "timeoutMs": 60000,
+  "maxTurns": 10,
+  "tokenBudget": 25000
+}

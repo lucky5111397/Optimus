@@ -1,0 +1,22 @@
+{
+  "id": "fixture-03-validation-recovery",
+  "title": "Handle Schema Drift and Optional Email Normalization",
+  "category": "SELF_HEALING",
+  "difficulty": "MEDIUM",
+  "description": "validateRegistration falsely marks payload invalid when optional phone number is missing, and fails to lowercase email.",
+  "taskPrompt": "In src/validator.js, update validateRegistration so that 'phone' is optional (validating length only when present), and ensure that returned email is trimmed and converted to lowercase.",
+  "expectedChangedFiles": [
+    "src/validator.js"
+  ],
+  "forbiddenChangedFiles": [
+    "test.js",
+    "package.json"
+  ],
+  "baselineExpectation": {
+    "expectedExitCode": 1,
+    "expectedErrorPattern": "Phone number is required"
+  },
+  "timeoutMs": 60000,
+  "maxTurns": 15,
+  "tokenBudget": 30000
+}

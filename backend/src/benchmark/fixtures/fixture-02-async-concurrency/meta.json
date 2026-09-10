@@ -1,0 +1,22 @@
+{
+  "id": "fixture-02-async-concurrency",
+  "title": "Fix Promise Resolution Race in Async Queue",
+  "category": "BUG_FIX",
+  "difficulty": "MEDIUM",
+  "description": "In src/queue.js, process() resolves prematurely before asynchronous queue items complete.",
+  "taskPrompt": "In src/queue.js, fix AsyncTaskQueue.prototype.process so that it properly waits for all queued async functions to resolve before returning the aggregated results array, respecting concurrency limits.",
+  "expectedChangedFiles": [
+    "src/queue.js"
+  ],
+  "forbiddenChangedFiles": [
+    "test.js",
+    "package.json"
+  ],
+  "baselineExpectation": {
+    "expectedExitCode": 1,
+    "expectedErrorPattern": "AssertionError"
+  },
+  "timeoutMs": 60000,
+  "maxTurns": 12,
+  "tokenBudget": 25000
+}

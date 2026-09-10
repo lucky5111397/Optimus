@@ -17,6 +17,7 @@ const tasksRoutes = require('./routes/tasks');
 const apiRoutes = require('./routes/api');
 const settingsRoutes = require('./routes/settings');
 const webhookRoutes = require('./routes/webhooks');
+const benchmarkRoutes = require('./routes/benchmark');
 const { authLimiter, taskLimiter, webhookLimiter } = require('./middleware/rateLimit');
 
 const mongoose = require('mongoose');
@@ -104,6 +105,7 @@ app.use('/api/repositories', repositoriesRoutes);
 app.use('/api/tasks', taskLimiter, tasksRoutes);
 app.use('/api/settings', settingsRoutes);
 app.use('/api/webhooks', webhookLimiter, webhookRoutes);
+app.use('/api/benchmark', benchmarkRoutes);
 app.use('/api', apiRoutes);
 
 // Error handling middleware (sanitized for production security)
