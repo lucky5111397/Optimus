@@ -59,6 +59,5 @@ OPTIMUS incorporates defense-in-depth architectural controls:
 - **CORS Origin Containment**: Cross-Origin requests are restricted to explicitly configured origin domains (`FRONTEND_URL` and authorized local dev hosts).
 
 ### 5. Automated Static & Supply-Chain Analysis
-- **CodeQL SAST**: GitHub Actions continuously scans JavaScript and TypeScript code for injection vulnerabilities, insecure deserialization, and path traversal vectors.
-- **Dependency Review & Dependabot**: Pull requests are evaluated for vulnerable dependencies, and Dependabot automatically scans for outdated packages across `backend`, `frontend`, and `worker`.
-
+- **Dependabot Updates**: Active and automated. Dependabot continuously monitors and generates pull requests for outdated and vulnerable dependencies across `backend`, `frontend`, `worker`, and GitHub Actions (leveraging the repository's active Dependency Graph).
+- **CodeQL SAST & Dependency Review Workflows**: Workflow definitions (`.github/workflows/codeql.yml` and `.github/workflows/dependency-review.yml`) are pre-configured in the repository. Because this repository is private, automated execution of CodeQL code scanning and PR dependency review requires GitHub Code Security / GitHub Advanced Security (GHAS) entitlement. Until that entitlement is enabled, these workflows are preserved in a future-ready manual dispatch state with automated triggers commented out to prevent unavoidable CI failures.

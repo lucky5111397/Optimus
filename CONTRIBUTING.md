@@ -17,6 +17,7 @@ OPTIMUS is currently developed under a solo-developer model with automated gover
 - **No Direct Push to `main`**: The `main` branch is protected by a GitHub Ruleset requiring PR-based delivery, linear history, and passing CI status checks.
 - **Self-Review with Quality Gates**: While artificial multi-reviewer approval or `CODEOWNERS` sign-offs are not required to unblock merges, all changes must be delivered via Pull Requests that satisfy all automated CI checks and pass rigorous self-review before merging.
 - **Linear History**: Commits to `main` are integrated via squash-merge or rebase-merge to maintain a clean, bisectable history. Force-pushes to `main` are strictly blocked.
+- **Automated CI Status Checks**: Required status checks currently comprise Backend Validation & Benchmark and Frontend Build & Verification (`.github/workflows/ci.yml`). CodeQL SAST and Dependency Review workflows are pre-configured in `.github/workflows/` and will be activated once GitHub Code Security / Advanced Security is enabled for this private repository.
 
 ---
 
@@ -139,4 +140,3 @@ Before submitting a Pull Request:
 - [ ] No secrets or unredacted keys are introduced.
 - [ ] Clean diff with zero whitespace warnings (`git diff --check`).
 - [ ] All automated CI status checks pass on GitHub.
-
