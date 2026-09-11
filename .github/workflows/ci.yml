@@ -63,7 +63,7 @@ jobs:
 
       - name: Upload benchmark scorecard artifact
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: benchmark-reports
           path: backend/src/benchmark/reports/
