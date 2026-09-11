@@ -1,0 +1,76 @@
+name: Bug Report
+description: Report a bug, malfunction, or unexpected behavior in OPTIMUS
+title: "[BUG]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for reporting an issue with OPTIMUS. Please provide as much detail as possible to help isolate and resolve the problem.
+  - type: textarea
+    id: description
+    attributes:
+      label: Bug Description
+      description: A clear and concise description of what the bug is.
+      placeholder: Describe what happened...
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to Reproduce
+      description: Clear steps to reproduce the behavior.
+      placeholder: |
+        1. Start service with '...'
+        2. Trigger action '...'
+        3. See error
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected vs Actual Behavior
+      description: What did you expect to happen versus what actually occurred?
+    validations:
+      required: true
+  - type: dropdown
+    id: component
+    attributes:
+      label: Subsystem / Component
+      description: Which area of OPTIMUS is affected?
+      options:
+        - Backend API (backend/)
+        - Frontend UI (frontend/)
+        - AI Gateway / Execution Engine (backend/src/ai/, backend/src/services/)
+        - AST Indexer / Parser (backend/src/services/astService.js)
+        - Background Worker (worker/)
+        - Benchmark Suite & Metrics (backend/src/benchmark/)
+        - Infrastructure / Docker (infrastructure/)
+        - CI / CD Workflows (.github/)
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Environment Details
+      description: OS, Node version, browser (if UI), MongoDB version.
+      placeholder: e.g. Node 20.18, Ubuntu 22.04 / Windows 11, MongoDB 7.0
+    validations:
+      required: false
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant Logs or Error Stack
+      description: Terminal logs, execution logs, or browser console output (ensure no secrets or API keys are included).
+      render: text
+    validations:
+      required: false
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Pre-Submission Checklist
+      options:
+        - label: I have verified this is not a duplicate of an existing issue
+          required: true
+        - label: I have scrubbed all sensitive credentials, tokens, and private API keys from the report
+          required: true
