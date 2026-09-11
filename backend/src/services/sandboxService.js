@@ -26,7 +26,7 @@ function scrubTokens(str) {
  * Validates that workspace path is strictly contained inside the workspaces directory.
  */
 function validateSandboxWorkspace(workspacePath) {
-  if (!workspacePath || typeof workspacePath !== 'string') {
+  if (!workspacePath || typeof workspacePath !== 'string' || workspacePath.includes('\0')) {
     throw new Error('Invalid workspace path provided to sandbox');
   }
 
@@ -35,17 +35,10 @@ function validateSandboxWorkspace(workspacePath) {
   const rootWorkspaces = path.resolve(__dirname, '..', '..', '..', 'workspaces');
 
   const validRoots = [backendWorkspaces, rootWorkspaces];
-  let isContained = validRoots.some(root => {
+  const isContained = validRoots.some(root => {
     const withSep = root.endsWith(path.sep) ? root : root + path.sep;
     return resolvedTarget !== root && resolvedTarget.startsWith(withSep);
   });
-
-  // Support test workspaces under scratch or when running in test mode
-  if (!isContained && (process.env.NODE_ENV === 'test' || resolvedTarget.includes('test_workspace'))) {
-    if (resolvedTarget.includes('test_workspace') || resolvedTarget.includes('scratch')) {
-      isContained = true;
-    }
-  }
 
   if (!isContained) {
     throw new Error('Sandbox violation: Execution outside isolated workspace directory is forbidden');

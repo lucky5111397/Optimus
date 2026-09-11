@@ -195,17 +195,37 @@ async function executeTool(name, args = {}, workspaceRoot) {
         }
 
         let content = await fs.readFile(filePath, 'utf8');
-        if (!content.includes(args.oldText)) {
+        let oldText = args.oldText;
+        let newText = args.newText;
+
+        // Line-ending normalization fallback for Windows CRLF / Linux LF compatibility
+        if (!content.includes(oldText)) {
+          if (content.includes('\r\n') && !oldText.includes('\r\n')) {
+            const crlfOld = oldText.replace(/\r?\n/g, '\r\n');
+            if (content.includes(crlfOld)) {
+              oldText = crlfOld;
+              newText = newText.replace(/\r?\n/g, '\r\n');
+            }
+          } else if (!content.includes('\r\n') && oldText.includes('\r\n')) {
+            const lfOld = oldText.replace(/\r\n/g, '\n');
+            if (content.includes(lfOld)) {
+              oldText = lfOld;
+              newText = newText.replace(/\r\n/g, '\n');
+            }
+          }
+        }
+
+        if (!content.includes(oldText)) {
           throw new Error('oldText not found in file. Patch failed. Please read the file again to ensure exact text matching.');
         }
 
         // Check for ambiguous multiple occurrences
-        const occurrences = content.split(args.oldText).length - 1;
+        const occurrences = content.split(oldText).length - 1;
         if (occurrences > 1) {
           throw new Error(`oldText matches ${occurrences} locations in ${args.path}. Please provide more surrounding lines to make the patch location unique.`);
         }
 
-        content = content.replace(args.oldText, args.newText);
+        content = content.replace(oldText, newText);
         await fs.writeFile(filePath, content, 'utf8');
         return `Successfully patched ${args.path}`;
       }
