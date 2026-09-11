@@ -1,0 +1,55 @@
+version: 2
+updates:
+  # GitHub Actions workflows
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "04:00"
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "chore(ci)"
+
+  # Backend dependencies
+  - package-ecosystem: "npm"
+    directory: "/backend"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "04:30"
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "chore(backend)"
+    groups:
+      dev-dependencies:
+        dependency-type: "development"
+      production-dependencies:
+        dependency-type: "production"
+
+  # Frontend dependencies
+  - package-ecosystem: "npm"
+    directory: "/frontend"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "05:00"
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "chore(frontend)"
+    groups:
+      dev-dependencies:
+        dependency-type: "development"
+      production-dependencies:
+        dependency-type: "production"
+
+  # Worker microservice dependencies
+  - package-ecosystem: "npm"
+    directory: "/worker"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "05:30"
+    open-pull-requests-limit: 3
+    commit-message:
+      prefix: "chore(worker)"

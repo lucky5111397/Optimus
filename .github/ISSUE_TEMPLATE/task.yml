@@ -1,0 +1,62 @@
+name: Engineering Task / Phase Task
+description: Track an engineering milestone, development phase, refactoring, or maintenance chore
+title: "[TASK]: "
+labels: ["task"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this template for tracking engineering phases, refactorings, infrastructure tasks, or governance chores.
+  - type: textarea
+    id: objective
+    attributes:
+      label: Task Objective
+      description: What is the primary objective of this task or phase?
+      placeholder: State the core goal and context...
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: Scope & Acceptance Criteria
+      description: List specific deliverables, requirements, and completion criteria.
+      placeholder: |
+        - [ ] Deliverable 1
+        - [ ] Deliverable 2
+        - [ ] Acceptance criterion
+    validations:
+      required: true
+  - type: textarea
+    id: implementation
+    attributes:
+      label: Technical Implementation Details
+      description: Target files, modules, data models, API endpoints, or workflows involved.
+    validations:
+      required: false
+  - type: textarea
+    id: security
+    attributes:
+      label: Security & Boundary Considerations
+      description: How does this task interact with sandbox boundaries, path containment, auth, or secrets hygiene?
+    validations:
+      required: false
+  - type: textarea
+    id: verification
+    attributes:
+      label: Verification Plan
+      description: What automated tests, benchmarks, or manual verification steps will confirm completion?
+      placeholder: |
+        - Backend test suite: cd backend && npm test
+        - Mock benchmark suite: cd backend && npm run benchmark -- --mode=mock
+        - Frontend build: cd frontend && npm run build
+    validations:
+      required: true
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Task Governance
+      options:
+        - label: A dedicated feature/chore/phase branch will be created for implementation
+          required: true
+        - label: Issue will remain OPEN until the associated Pull Request is merged into main
+          required: true

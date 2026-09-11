@@ -1,0 +1,61 @@
+name: CodeQL Security Analysis
+
+# ==============================================================================
+# NOTE: GitHub Code Scanning with CodeQL requires GitHub Advanced Security (GHAS)
+# or GitHub Code Security enabled for private repositories.
+#
+# In private repositories without this entitlement, automated PR and push runs
+# fail because the Code Scanning API is disabled at the repository level.
+#
+# To prevent unavoidable CI failures while keeping this repository future-ready:
+# - Automated triggers (push, pull_request, schedule) are preserved below in
+#   commented form.
+# - The workflow is configured with workflow_dispatch for manual execution.
+# - To re-enable automated scanning once GitHub Code Security / GHAS is enabled,
+#   uncomment the push, pull_request, and schedule trigger blocks below.
+# ==============================================================================
+
+on:
+  workflow_dispatch:
+  # push:
+  #   branches:
+  #     - main
+  # pull_request:
+  #   branches:
+  #     - main
+  # schedule:
+  #   - cron: '0 3 * * 1'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  analyze:
+    name: CodeQL Analysis (${{ matrix.language }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      security-events: write
+      actions: read
+      contents: read
+
+    strategy:
+      fail-fast: false
+      matrix:
+        language: ["javascript-typescript"]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: ${{ matrix.language }}
+          queries: security-extended
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:${{ matrix.language }}"

@@ -1,4 +1,4 @@
-﻿# OPTIMUS — Autonomous AI Software Engineer Platform
+# OPTIMUS — Autonomous AI Software Engineer Platform
 
 OPTIMUS is an autonomous engineering platform that inspects codebases, generates implementation plans, iteratively executes code modifications through specialized toolkits, validates diffs, and delivers pull requests.
 
@@ -86,8 +86,11 @@ Optimus/
 |   |-- Dockerfile.api     # Multi-stage API image
 |   |-- Dockerfile.frontend# Nginx SPA image
 |   `-- docker-compose.yml # Container orchestration
-`-- docs/
-    `-- DEVELOPMENT.md     # Local setup, testing, and security guides
+|-- .github/               # CI workflows, PR & issue templates, Dependabot
+|-- docs/
+|   `-- DEVELOPMENT.md     # Local setup, testing, and security guides
+|-- CONTRIBUTING.md        # Branching, commits, PR guidelines, testing workflow
+`-- SECURITY.md            # Responsible disclosure & execution security policy
 ```
 
 ---
@@ -157,6 +160,13 @@ The backend exposes diagnostic endpoints for container orchestrators:
 - `GET /api/health` — Basic service status
 - `GET /api/health/live` — Liveness probe (uptime and timestamp)
 - `GET /api/health/ready` — Readiness probe (database connection and AI gateway status)
+
+---
+
+## Contributing & Security
+
+- **Contributing**: See [`CONTRIBUTING.md`](CONTRIBUTING.md) for branch naming conventions, Conventional Commits, testing instructions, and pull request guidelines.
+- **Security Policy**: See [`SECURITY.md`](SECURITY.md) for vulnerability disclosure policies, sandbox boundaries, and credential hygiene practices.
 
 ---
 

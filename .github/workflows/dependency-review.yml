@@ -1,0 +1,41 @@
+name: Dependency Review
+
+# ==============================================================================
+# NOTE: GitHub Dependency Review requires GitHub Advanced Security (GHAS)
+# or GitHub Code Security enabled for private repositories.
+#
+# In private repositories without this entitlement, automated PR runs fail with:
+#   "Dependency Review is only supported on private repositories where GitHub Advanced Security is enabled."
+#
+# To prevent unavoidable CI failures while keeping this repository future-ready:
+# - The pull_request trigger is preserved below in commented form.
+# - The workflow is configured with workflow_dispatch for manual execution.
+# - To re-enable automated PR dependency review once GitHub Code Security / GHAS
+#   is enabled, uncomment the pull_request trigger block below.
+# ==============================================================================
+
+on:
+  workflow_dispatch:
+  # pull_request:
+  #   branches:
+  #     - main
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  dependency-review:
+    name: Dependency Vulnerability Review
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Dependency Review
+        uses: actions/dependency-review-action@v4
+        with:
+          fail-on-severity: high

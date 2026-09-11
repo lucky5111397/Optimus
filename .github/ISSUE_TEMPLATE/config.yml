@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security Vulnerability Reporting
+    url: https://github.com/lucky5111397/Optimus/security/advisories/new
+    about: Please report security vulnerabilities privately via GitHub Security Advisories rather than public issues.
+  - name: Questions & Architectural Discussions
+    url: https://github.com/lucky5111397/Optimus/discussions
+    about: Ask questions or discuss architectural designs and ideas with the maintainer.

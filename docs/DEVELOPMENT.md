@@ -1,4 +1,4 @@
-﻿# OPTIMUS — Developer & Contributor Guide
+# OPTIMUS — Developer & Contributor Guide
 
 This guide details local environment setup, architecture workflows, security policies, and API specifications for developing on OPTIMUS.
 
@@ -169,3 +169,10 @@ OPTIMUS uses the **Deep Space Dark** Stitch design system:
 | `text-text-primary` | `#DFE2EB` | High-emphasis body text and headings |
 | `text-text-secondary` | `#C2C6D6` | Subtitles, labels, and muted copy |
 | `font-mono` | JetBrains Mono | Code blocks, environment keys, diffs |
+
+---
+
+## 7. Contributing & Vulnerability Reporting
+
+- **Development Workflow & PR Process**: See [`CONTRIBUTING.md`](../CONTRIBUTING.md) for branch naming standards, Conventional Commit rules, automated testing requirements, and the Pull Request checklist.
+- **Security Policy & Responsible Disclosure**: See [`SECURITY.md`](../SECURITY.md) for vulnerability disclosure channels, sandbox containment boundaries, and token sanitization standards.

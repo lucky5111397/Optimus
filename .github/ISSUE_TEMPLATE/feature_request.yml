@@ -1,0 +1,57 @@
+name: Feature Request
+description: Propose a new capability, enhancement, or architectural improvement for OPTIMUS
+title: "[FEAT]: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this template to suggest new features or improvements for the OPTIMUS autonomous AI software engineering platform.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem Statement / Motivation
+      description: What challenge, limitation, or user need does this feature address?
+      placeholder: Describe the context and motivation...
+    validations:
+      required: true
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed Solution & Experience
+      description: Detailed description of the desired behavior, API design, or UI experience.
+      placeholder: Outline how the solution should work...
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives Considered
+      description: Any alternative designs, libraries, or workarounds you considered.
+    validations:
+      required: false
+  - type: dropdown
+    id: component
+    attributes:
+      label: Target Subsystem
+      description: Which area of the codebase does this feature primarily impact?
+      options:
+        - Autonomous Execution Engine & Agent Tools
+        - Codebase Intelligence & AST Indexer
+        - Planning & Plan Approval Workflow
+        - Frontend & Stitch Design System UI
+        - Backend API & Data Modeling
+        - Evaluation, Benchmarks & Metrics
+        - Infrastructure, Containers & Deployment
+        - Developer Tooling & CI/CD
+    validations:
+      required: true
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Checklist
+      options:
+        - label: I have searched existing issues to ensure this feature has not already been proposed
+          required: true
+        - label: This aligns with the autonomous software engineering goals of OPTIMUS
+          required: true
