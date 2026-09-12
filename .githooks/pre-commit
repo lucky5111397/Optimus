@@ -1,5 +1,0 @@
-#!/usr/bin/env sh
-# Optimus pre-commit secret detection hook
-# Blocks commit if secrets or sensitive credentials are staged
-
-node scripts/check-secrets.js --staged

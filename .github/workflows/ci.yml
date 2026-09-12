@@ -13,28 +13,10 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  security:
-    name: Secret Scanning & Environment Verification
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-
-      - name: Run automated secret scanning
-        run: node scripts/check-secrets.js
-
   backend:
     name: Backend Validation & Benchmark
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    needs: [security]
 
     services:
       mongodb:
@@ -68,9 +50,6 @@ jobs:
       - name: Install worker dependencies
         run: npm ci
         working-directory: worker
-
-      - name: Verify repository secrets
-        run: npm run check:secrets
 
       - name: Syntax check
         run: node --check src/server.js

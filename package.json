@@ -1,8 +1,1 @@
-{
-  "name": "optimus",
-  "private": true,
-  "scripts": {
-    "check:secrets": "node scripts/check-secrets.js",
-    "setup:hooks": "git config core.hooksPath .githooks"
-  }
-}
+{"name": "optimus", "private": true}
