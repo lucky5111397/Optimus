@@ -27,7 +27,7 @@ import NotificationsPanel from './components/NotificationsPanel';
 
 import { useAuth } from './features/auth/AuthContext';
 
-// Mock Auth wrapper for now, assuming we use AppShell for authenticated routes
+// Authenticated layout wrapper providing AppShell, CommandPalette, and Notifications
 function AuthenticatedLayout({ children }) {
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);

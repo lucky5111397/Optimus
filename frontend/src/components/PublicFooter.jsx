@@ -124,9 +124,6 @@ export default function PublicFooter() {
         <div className="pt-8 mt-8 border-t border-border/50 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-text-secondary">
           <p>© 2026 OPTIMUS Engineering Platform. Built for autonomous, verifiable software development.</p>
           <div className="flex items-center gap-4">
-            <span className="font-mono text-[11px] text-text-secondary">
-              Deep Space Dark • Stitch Design System
-            </span>
             <Link to="/login" className="text-primary hover:underline">
               Get Started →
             </Link>
