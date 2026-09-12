@@ -51,7 +51,6 @@ export function AuthProvider({ children }) {
         await fetchUser();
         return { success: true, isNew: data.isNew };
       }
-      return { success: false };
       const errData = await response.json().catch(() => ({}));
       return { 
         success: false, 
@@ -61,7 +60,6 @@ export function AuthProvider({ children }) {
       };
     } catch (err) {
       console.error('Failed to login with Google via backend', err);
-      return { success: false };
       const isNetwork = err.name === 'TypeError' || (err.message && err.message.toLowerCase().includes('fetch'));
       return { 
         success: false, 

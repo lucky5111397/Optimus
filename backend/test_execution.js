@@ -7,6 +7,7 @@ const Task = require('./src/models/Task');
 const TaskPlan = require('./src/models/TaskPlan');
 const Execution = require('./src/models/Execution');
 const { executeTask } = require('./src/services/executionService');
+const { computePlanHash } = require('./src/services/orchestrator');
 
 // Use a mock Repository model to bypass populate checks without touching the real DB collection
 const mockRepoId = new mongoose.Types.ObjectId();
@@ -39,24 +40,31 @@ async function setup() {
     status: 'READY'
   });
 
-  // 3. Create Task
+  // 3. Plan Data & Hash
+  const planSteps = [{
+    title: 'step 1',
+    description: 'change hello world to hello agent',
+    filesAffected: ['index.js']
+  }];
+  const planMarkdown = 'test';
+  const planHash = computePlanHash({ markdown: planMarkdown, steps: planSteps });
+
+  // 4. Create Task
   const task = new Task({
     repositoryId: mockRepoId,
     userId: mockUserId,
     title: 'test end to end execution',
-    status: 'AWAITING_APPROVAL'
+    status: 'AWAITING_APPROVAL',
+    approvedPlanHash: planHash
   });
   await task.save();
 
-  // 4. Create Plan
+  // 5. Create Plan
   const plan = new TaskPlan({
     taskId: task._id,
-    markdown: 'test',
-    steps: [{
-      title: 'step 1',
-      description: 'change hello world to hello agent',
-      filesAffected: ['index.js']
-    }]
+    markdown: planMarkdown,
+    planHash,
+    steps: planSteps
   });
   await plan.save();
 

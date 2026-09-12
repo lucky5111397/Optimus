@@ -10,6 +10,10 @@ export default function Login() {
   const [isNewUser, setIsNewUser] = useState(false);
 
   const handleGoogleLogin = async () => {
+    if (!auth || !googleProvider) {
+      setErrorMsg('Google authentication is not configured. Please sign in with GitHub.');
+      return;
+    }
     try {
       setGoogleLoading(true);
       setErrorMsg('');

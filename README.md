@@ -46,6 +46,26 @@ OPTIMUS is an autonomous engineering platform that inspects codebases, generates
 
 ---
 
+## UI Showcase
+
+### 1. AST Codebase Explorer
+![AST Codebase Explorer](docs/screenshots/01-codebase-explorer.png)
+*Interactive repository workspace featuring syntax-tree symbol extraction (classes, methods, dependencies), file hierarchy navigation, and real-time TypeScript file preview.*
+
+### 2. AI Implementation Plan & Approval Gate
+![AI Implementation Plan and Approval Gate](docs/screenshots/02-implementation-plan.png)
+*Deterministic planning stage presenting multi-step execution sequences, affected files, structural assumptions, and risks before requiring explicit developer authorization.*
+
+### 3. Execution Review, Validation & Unified Diff
+![Execution Review and Unified Diff](docs/screenshots/03-live-execution.png)
+*Post-execution review displaying automated validation results (`vitest`), changed files breakdown, and color-coded unified git diff viewer prior to GitHub pull request creation.*
+
+### 4. Platform Overview & Workflow Pipeline
+![Platform Overview](docs/screenshots/04-pipeline-overview.png)
+*Public onboarding view outlining the 9-stage deterministic engineering pipeline from repository ingestion to verified pull request delivery.*
+
+---
+
 ## Tech Stack
 
 | Layer | Technologies |
@@ -91,10 +111,10 @@ Optimus/
 |   |-- Dockerfile.api     # Multi-stage API image
 |   |-- Dockerfile.frontend# Nginx SPA image
 |   `-- docker-compose.yml # Container orchestration
+|-- docs/                  # Showcase captures and documentation assets
+|   `-- screenshots/       # High-fidelity UI screenshots
 |-- .github/               # CI workflows, PR & issue templates
-|-- docs/
-|   `-- DEVELOPMENT.md     # Local setup, testing, and security guides
-|-- CONTRIBUTING.md        # Branching, commits, PR guidelines, testing workflow
+|-- OPTIMUS.pdf            # Architecture design & benchmark specification
 `-- SECURITY.md            # Responsible disclosure & execution security policy
 ```
 
@@ -145,6 +165,16 @@ npm run dev
 # Frontend runs on http://localhost:5173
 ```
 
+### 6. Seed Showcase Fixtures (Optional)
+To inspect and demonstrate the authenticated web UI with realistic, pre-indexed project data without executing a live multi-turn agent run:
+
+```bash
+cd backend
+npm run seed:showcase
+```
+
+> **Note**: This command populates deterministic synthetic demonstration fixtures (sample repository, AST symbol index, implementation plan, and patch review diff) strictly for local UI evaluation. It is development-only, introduces zero production credentials, and safely aborts if `NODE_ENV=production`.
+
 ---
 
 ## Running with Docker Compose
@@ -179,10 +209,9 @@ The backend exposes diagnostic endpoints for container orchestrators:
 
 ---
 
-## Contributing & Security
+## Security Policy
 
-- **Contributing**: See [`CONTRIBUTING.md`](CONTRIBUTING.md) for branch naming conventions, Conventional Commits, testing instructions, and pull request guidelines.
-- **Security Policy**: See [`SECURITY.md`](SECURITY.md) for vulnerability disclosure policies, sandbox boundaries, and credential hygiene practices.
+See [`SECURITY.md`](SECURITY.md) for vulnerability disclosure policies, sandbox boundaries, and credential hygiene practices.
 
 ---
 
