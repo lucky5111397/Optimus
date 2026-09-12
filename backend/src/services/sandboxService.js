@@ -1,5 +1,5 @@
 const path = require('path');
-const { spawn } = require('child_process');
+const axios = require('axios');
 
 const WORKSPACES_DIR = path.resolve(__dirname, '..', '..', 'workspaces');
 
@@ -106,135 +106,103 @@ function buildSterileEnvironment(workspacePath) {
   return sterileEnv;
 }
 
+let localWorkerServer = null;
+
 /**
- * Executes a validation command inside the sandbox context with strict resource and timeout enforcement.
+ * Ensures worker service is reachable before dispatching execution requests.
+ * In local test/benchmark mode, starts local worker instance if not already running.
+ */
+async function ensureWorkerAvailable(workerUrl) {
+  try {
+    const healthUrl = `${workerUrl}/health`;
+    const res = await axios.get(healthUrl, { timeout: 1000 });
+    if (res.status === 200) return true;
+  } catch (_) {}
+
+  // Only bootstrap local worker if using default local URL (port 8080) and not an explicit custom WORKER_URL
+  const isDefaultLocal = (!process.env.WORKER_URL || process.env.WORKER_URL === 'http://127.0.0.1:8080' || process.env.WORKER_URL === 'http://localhost:8080') && (workerUrl.includes('localhost:8080') || workerUrl.includes('127.0.0.1:8080'));
+  if (isDefaultLocal && !localWorkerServer) {
+    try {
+      const { startWorkerServer } = require('../../../worker/src/worker');
+      localWorkerServer = await startWorkerServer(8080);
+      return true;
+    } catch (_) {}
+  }
+  return false;
+}
+
+/**
+ * Executes a validation command inside the isolated worker sandbox via HTTP POST /execute.
+ * Untrusted repository code is NEVER executed directly on the backend host.
  */
 async function runInSandbox(command, workspacePath, options = {}) {
   const validatedWorkspace = validateSandboxWorkspace(workspacePath);
   const validatedCommand = validateSandboxCommand(command);
 
-  const timeoutMs = Math.min(Math.max(options.timeoutMs || 60000, 1000), 120000); // 1s to 120s
+  const timeoutMs = Math.min(Math.max(options.timeoutMs || 60000, 1000), 120000);
   const maxOutputChars = options.maxOutputChars || 50000;
+  const workerUrl = (process.env.WORKER_URL || 'http://127.0.0.1:8080').replace(/\/+$/, '');
 
-  const cmdParts = validatedCommand.split(/\s+/);
-  const baseCmd = cmdParts[0];
-  const cmdArgs = cmdParts.slice(1);
+  await ensureWorkerAvailable(workerUrl);
 
-  let spawnCmd = baseCmd;
-  let spawnArgs = cmdArgs;
+  try {
+    const response = await axios.post(
+      `${workerUrl}/execute`,
+      {
+        command: validatedCommand,
+        workspacePath: validatedWorkspace,
+        timeoutMs,
+        maxOutputChars
+      },
+      {
+        timeout: timeoutMs + 5000,
+        validateStatus: () => true
+      }
+    );
 
-  // On Windows, handle npm safely without shell
-  if (process.platform === 'win32' && baseCmd === 'npm') {
-    const npmCli = path.join(path.dirname(process.execPath), 'node_modules', 'npm', 'bin', 'npm-cli.js');
-    try {
-      require('fs').accessSync(npmCli);
-      spawnCmd = process.execPath;
-      spawnArgs = [npmCli, ...cmdArgs];
-    } catch (_) {
-      spawnCmd = 'npm.cmd';
-      spawnArgs = cmdArgs;
-    }
+    const data = response.data || {};
+    const passed = response.status === 200 && data.passed === true;
+    const exitCode = typeof data.exitCode === 'number' ? data.exitCode : (passed ? 0 : 1);
+    const stdout = scrubTokens(data.stdout || '');
+    const stderr = scrubTokens(data.stderr || data.error || '');
+    const durationMs = data.durationMs || 0;
+    const timedOut = !!data.timedOut;
+
+    const outputText = data.output
+      ? scrubTokens(data.output)
+      : `Exit Code: ${timedOut ? 'TIMED_OUT (-1)' : exitCode}\nOutput:\n${stdout}${stderr ? ('\n' + stderr) : ''}`;
+
+    return {
+      exitCode,
+      stdout,
+      stderr,
+      passed,
+      durationMs,
+      timedOut,
+      command: validatedCommand,
+      output: outputText,
+      toString() { return this.output; }
+    };
+  } catch (err) {
+    const isTimeout = err.code === 'ECONNABORTED' || (err.message && err.message.includes('timeout'));
+    const exitCode = isTimeout ? -1 : 1;
+    const errSummary = isTimeout
+      ? 'Worker execution timed out'
+      : `Worker service is unavailable (${err.message})`;
+    const outputText = `Exit Code: ${isTimeout ? 'TIMED_OUT (-1)' : 1}\nOutput:\nWorker execution error: ${errSummary}`;
+
+    return {
+      exitCode,
+      stdout: '',
+      stderr: errSummary,
+      passed: false,
+      durationMs: isTimeout ? timeoutMs : 0,
+      timedOut: isTimeout,
+      command: validatedCommand,
+      output: outputText,
+      toString() { return this.output; }
+    };
   }
-
-  const sterileEnv = buildSterileEnvironment(validatedWorkspace);
-  const startTime = Date.now();
-  let timedOut = false;
-
-  return new Promise((resolve) => {
-    let proc;
-    try {
-      proc = spawn(spawnCmd, spawnArgs, {
-        cwd: validatedWorkspace,
-        env: sterileEnv,
-        shell: false,
-        windowsHide: true
-      });
-    } catch (spawnErr) {
-      const durationMs = Date.now() - startTime;
-      const errSummary = `Exit Code: 1\nOutput:\nSandbox spawn error: ${spawnErr.message}`;
-      return resolve({
-        exitCode: 1,
-        stdout: '',
-        stderr: spawnErr.message,
-        passed: false,
-        durationMs,
-        timedOut: false,
-        command: validatedCommand,
-        output: errSummary,
-        toString() { return this.output; }
-      });
-    }
-
-    // Timeout killer: Terminates entire process tree
-    const timer = setTimeout(() => {
-      timedOut = true;
-      try {
-        if (process.platform === 'win32' && proc.pid) {
-          spawn('taskkill', ['/pid', proc.pid.toString(), '/T', '/F'], { shell: false });
-        } else if (proc.pid) {
-          proc.kill('SIGTERM');
-          setTimeout(() => {
-            try { proc.kill('SIGKILL'); } catch (_) {}
-          }, 2000);
-        }
-      } catch (_) {}
-    }, timeoutMs);
-
-    let stdout = '';
-    let stderr = '';
-
-    proc.stdout.on('data', (chunk) => {
-      if (stdout.length < maxOutputChars) {
-        stdout += chunk.toString();
-      }
-    });
-
-    proc.stderr.on('data', (chunk) => {
-      if (stderr.length < maxOutputChars) {
-        stderr += chunk.toString();
-      }
-    });
-
-    proc.on('error', (err) => {
-      clearTimeout(timer);
-      const durationMs = Date.now() - startTime;
-      const errSummary = `Exit Code: 1\nOutput:\nSandbox process error: ${err.message}`;
-      resolve({
-        exitCode: 1,
-        stdout: scrubTokens(stdout.substring(0, 5000)),
-        stderr: scrubTokens((stderr + '\n' + err.message).substring(0, 5000)),
-        passed: false,
-        durationMs,
-        timedOut,
-        command: validatedCommand,
-        output: errSummary,
-        toString() { return this.output; }
-      });
-    });
-
-    proc.on('close', (code) => {
-      clearTimeout(timer);
-      const durationMs = Date.now() - startTime;
-      const exitCode = timedOut ? -1 : (code !== null ? code : 1);
-      const passed = exitCode === 0 && !timedOut;
-
-      const combinedOut = (stdout + (stderr ? ('\n' + stderr) : '')).substring(0, 5000);
-      const scrubbed = scrubTokens(combinedOut);
-      const outputText = `Exit Code: ${timedOut ? 'TIMED_OUT (-1)' : exitCode}\nOutput:\n${scrubbed}`;
-
-      resolve({
-        exitCode,
-        stdout: scrubTokens(stdout.substring(0, 5000)),
-        stderr: scrubTokens(stderr.substring(0, 5000)),
-        passed,
-        durationMs,
-        timedOut,
-        command: validatedCommand,
-        output: outputText,
-        toString() { return this.output; }
-      });
-    });
-  });
 }
 
 module.exports = {

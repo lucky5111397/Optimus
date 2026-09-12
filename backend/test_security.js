@@ -1,10 +1,13 @@
 const path = require('path');
+const fs = require('fs');
 const { executeTool } = require('./src/agent/toolExecutors');
-const { validateSandboxWorkspace } = require('./src/services/sandboxService');
+const { validateSandboxWorkspace, runInSandbox } = require('./src/services/sandboxService');
 const workspacePath = path.resolve(__dirname, 'workspaces', 'test-repo');
 
 async function testSecurity() {
   let failed = false;
+  fs.mkdirSync(workspacePath, { recursive: true });
+
   const r1 = await executeTool('read_file', { path: '../../.env' }, workspacePath);
   if (r1.includes('Error:')) console.log('PASS: Path traversal blocked -', r1);
   else { console.error('FAIL: Path traversal allowed!'); failed = true; }
@@ -63,10 +66,37 @@ async function testSecurity() {
     process.env.NODE_ENV = originalEnv;
   }
 
+  // Worker Unavailability Failure Handling Test
+  const prevWorkerUrl = process.env.WORKER_URL;
+  try {
+    process.env.WORKER_URL = 'http://127.0.0.1:59999'; // Non-existent worker port
+    const unreachableRes = await runInSandbox('npm test', workspacePath, { timeoutMs: 2000 });
+    if (unreachableRes.passed === false && unreachableRes.exitCode === 1 && unreachableRes.stderr.includes('unavailable')) {
+      console.log('PASS: Worker unavailability handled safely with structured error');
+    } else {
+      console.error('FAIL: Worker unavailability did not return expected structured error:', unreachableRes);
+      failed = true;
+    }
+  } catch (err) {
+    console.error('FAIL: Worker unavailability threw unhandled exception:', err);
+    failed = true;
+  } finally {
+    if (prevWorkerUrl) process.env.WORKER_URL = prevWorkerUrl;
+    else delete process.env.WORKER_URL;
+  }
+
+  // Backend Host Spawn Elimination Audit
+  const sandboxServiceSource = fs.readFileSync(path.resolve(__dirname, 'src', 'services', 'sandboxService.js'), 'utf8');
+  if (sandboxServiceSource.includes("require('child_process')") || sandboxServiceSource.includes('child_process.spawn')) {
+    console.error('FAIL: sandboxService.js still imports or uses child_process!');
+    failed = true;
+  } else {
+    console.log('PASS: sandboxService.js completely eliminates direct child_process usage');
+  }
+
   if (failed) {
     process.exit(1);
   }
 }
 
 testSecurity();
-

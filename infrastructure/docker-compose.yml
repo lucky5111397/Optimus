@@ -1,4 +1,3 @@
-
 services:
   mongodb:
     image: mongo:latest
@@ -8,7 +7,7 @@ services:
     volumes:
       - optimus-mongo-data:/data/db
     networks:
-      - optimus-net
+      - optimus-backend-net
 
   backend:
     build:
@@ -20,22 +19,44 @@ services:
     environment:
       - MONGODB_URI=mongodb://mongodb:27017/optimus
       - WORKER_URL=http://worker:8080
+      - WORKSPACES_ROOT=/app/workspaces
+    volumes:
+      - optimus-workspaces:/app/workspaces
     depends_on:
       - mongodb
+      - worker
     networks:
-      - optimus-net
+      - optimus-backend-net
+      - optimus-worker-net
+      - optimus-frontend-net
 
   worker:
     build:
       context: ../worker
       dockerfile: Dockerfile
     container_name: optimus-worker
-    ports:
-      - "8080:8080"
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m
+      - /root/.npm:rw,size=128m
+    environment:
+      - PORT=8080
+      - NODE_ENV=production
+      - WORKSPACES_ROOT=/tmp/optimus_workspaces
     volumes:
-      - optimus-workspaces:/tmp/optimus_workspaces
+      - optimus-workspaces:/tmp/optimus_workspaces:rw
     networks:
-      - optimus-net
+      - optimus-worker-net
+    deploy:
+      resources:
+        limits:
+          cpus: '1.5'
+          memory: 1024M
+          pids: 100
 
   frontend:
     build:
@@ -47,13 +68,17 @@ services:
     environment:
       - VITE_API_URL=http://localhost:3000/api
     networks:
-      - optimus-net
+      - optimus-frontend-net
 
 networks:
-  optimus-net:
+  optimus-backend-net:
+    driver: bridge
+  optimus-worker-net:
+    driver: bridge
+    internal: true
+  optimus-frontend-net:
     driver: bridge
 
 volumes:
   optimus-mongo-data:
   optimus-workspaces:
-

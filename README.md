@@ -53,7 +53,7 @@ OPTIMUS is an autonomous engineering platform that inspects codebases, generates
 | **Backend** | Node.js 20, Express 5, Mongoose 9, JWT, Cookie-Parser |
 | **Database** | MongoDB 6+ |
 | **AI Gateway** | OpenRouter REST API (Free-tier model hierarchy with fallback) |
-| **Worker** | Node.js 20 microservice with health and info probes |
+| **Worker** | Isolated containerized execution sandbox with sterile environment and polyglot command runner |
 | **Containers** | Multi-stage Dockerfiles (`api`, `frontend`, `worker`), Docker Compose |
 
 ---
@@ -79,9 +79,13 @@ Optimus/
 |   |   |-- pages/         # Dashboard, Analytics, History, Settings
 |   |   `-- App.jsx        # Routing configuration
 |   `-- .env.example       # Frontend environment template
-|-- worker/                # Background worker service
-|   |-- src/worker.js      # Worker health & info server
-|   `-- Dockerfile         # Production worker container
+|-- worker/                # Sandboxed execution worker
+|   |-- src/
+|   |   |-- executor.js    # Sterile process containment & resource bounding
+|   |   |-- runners.js     # Polyglot command validation & execution mappings
+|   |   `-- worker.js      # Worker HTTP server (POST /execute)
+|   |-- test/              # Worker security test suite
+|   `-- Dockerfile         # Hardened worker container
 |-- infrastructure/        # Docker Compose & container definitions
 |   |-- Dockerfile.api     # Multi-stage API image
 |   |-- Dockerfile.frontend# Nginx SPA image
@@ -143,7 +147,7 @@ docker compose up -d --build
 Access points:
 - **Frontend SPA**: `http://localhost:5173`
 - **Backend API**: `http://localhost:3000`
-- **Worker Probes**: `http://localhost:8080/health`
+- **Worker Sandbox**: `http://localhost:8080/health` (Execution at `POST /execute`)
 - **MongoDB**: `localhost:27017`
 
 To inspect service health:
