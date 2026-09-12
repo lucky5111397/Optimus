@@ -90,6 +90,14 @@ npm run dev
 ```
 Vite will start the development server on `http://localhost:5173`.
 
+### Running Worker
+```bash
+cd worker
+npm install
+npm start
+```
+Starts the isolated worker execution sandbox on `http://localhost:8080` to handle untrusted repository execution requests.
+
 ### Production Build Verification
 To ensure code compiles cleanly for production:
 ```bash
