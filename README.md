@@ -7,29 +7,30 @@ OPTIMUS is an autonomous engineering platform that inspects codebases, generates
 ## Architecture Overview
 
 ```
-+--------------------------------------------------------------------+
-|                       Frontend (React 18 + Vite)                   |
-|       Stitch "Deep Space Dark" Design System & Lucide Icons        |
-+---------------------------------+----------------------------------+
-                                  | HTTP / REST (CORS + Cookies)
-                                  v
-+--------------------------------------------------------------------+
-|                        Backend API (Express 5)                     |
-|  - Rate Limiting (In-Memory Sliding Window)                        |
-|  - Security Headers (X-Content-Type, X-Frame-Options, etc.)        |
-|  - Auth Middleware (JWT Cookies, Google Firebase, GitHub OAuth)    |
-|  - REST Endpoints (/auth, /repositories, /tasks, /settings, /api)  |
-+-------------------+-----------------------------+------------------+
-                    |                             |
-                    v                             v
-+-----------------------------+       +------------------------------+
-|     MongoDB Database        |       |      AI Gateway              |
-|  - Users & Accounts         |       |  - OpenRouter Multi-Model    |
-|  - Repositories & Branches  |       |    Fallback Hierarchy        |
-|  - Tasks, Context & Plans   |       |  - Autonomous Tool Calling   |
-|  - Executions & Diffs       |       |  - Offline Mock Engine       |
-|  - User Settings & Env Vars |       +------------------------------+
-+-----------------------------+
++------------------------------------------------------------------------------+
+|                       Frontend (React 19 + Vite)                             |
+|         Stitch "Deep Space Dark" Design System & Lucide Icons                |
++--------------------------------------+---------------------------------------+
+                                       | HTTP / REST (CORS + Cookies)
+                                       v
++------------------------------------------------------------------------------+
+|                        Backend API (Express 5)                               |
+|  - Rate Limiting (In-Memory Sliding Window)                                  |
+|  - Security Headers (X-Content-Type, X-Frame-Options, etc.)                  |
+|  - Auth Middleware (JWT Cookies, Google Firebase, GitHub OAuth)              |
+|  - REST Endpoints (/auth, /repositories, /tasks, /settings, /api)            |
++-----------+--------------------------+---------------------------+-----------+
+            |                          |                           |
+            | HTTP (POST /execute)     | Mongoose                  | OpenRouter REST
+            v                          v                           v
++-----------------------+   +-----------------------+   +----------------------+
+|    Worker Sandbox     |   |   MongoDB Database    |   |      AI Gateway      |
+| - Isolated Container  |   | - Users & Accounts    |   | - OpenRouter Multi-  |
+| - Sterile Runtime Env |   | - Repos & Branches    |   |   Model Fallback     |
+| - Command Allowlist   |   | - Tasks, Plans, Diffs |   | - Autonomous Tool    |
+| - Token Scrubbing     |   | - Executions & Audit  |   |   Calling Engine     |
+| - Resource/FS Bounds  |   | - User Settings & Env |   | - Offline Mock Suite |
++-----------------------+   +-----------------------+   +----------------------+
 ```
 
 ---
@@ -49,7 +50,7 @@ OPTIMUS is an autonomous engineering platform that inspects codebases, generates
 
 | Layer | Technologies |
 |---|---|
-| **Frontend** | React 18, Vite, Tailwind CSS, Lucide React, React Router 6 |
+| **Frontend** | React 19, Vite, Tailwind CSS, Lucide React, React Router 7 |
 | **Backend** | Node.js 20, Express 5, Mongoose 9, JWT, Cookie-Parser |
 | **Database** | MongoDB 6+ |
 | **AI Gateway** | OpenRouter REST API (Free-tier model hierarchy with fallback) |
@@ -72,7 +73,7 @@ Optimus/
 |   |   |-- routes/        # Express routers
 |   |   `-- services/      # Code execution, indexing, recovery services
 |   `-- .env.example       # Backend environment template
-|-- frontend/              # Vite + React 18 Single-Page Application
+|-- frontend/              # Vite + React 19 Single-Page Application
 |   |-- src/
 |   |   |-- components/    # AppShell, Navigation, Shared UI
 |   |   |-- features/      # Auth context, Repositories, Tasks
@@ -90,7 +91,7 @@ Optimus/
 |   |-- Dockerfile.api     # Multi-stage API image
 |   |-- Dockerfile.frontend# Nginx SPA image
 |   `-- docker-compose.yml # Container orchestration
-|-- .github/               # CI workflows, PR & issue templates, Dependabot
+|-- .github/               # CI workflows, PR & issue templates
 |-- docs/
 |   `-- DEVELOPMENT.md     # Local setup, testing, and security guides
 |-- CONTRIBUTING.md        # Branching, commits, PR guidelines, testing workflow
@@ -113,6 +114,9 @@ Copy `.env.example` templates and configure values:
 # Backend
 cp backend/.env.example backend/.env
 
+# Worker
+cp worker/.env.example worker/.env
+
 # Frontend
 cp frontend/.env.example frontend/.env
 ```
@@ -125,7 +129,15 @@ npm run dev
 # Server listens on http://localhost:3000
 ```
 
-### 4. Start Frontend
+### 4. Start Worker
+```bash
+cd worker
+npm install
+npm start
+# Worker sandbox listens on http://localhost:8080
+```
+
+### 5. Start Frontend
 ```bash
 cd frontend
 npm install
